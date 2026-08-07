@@ -104,7 +104,6 @@ document collections, so the books provably balance.
 
 ```bash
 # type-check + build the frontend
-cd frontend && npm run build
 
 # after any seed/server change, restart backend and confirm:
 curl http://localhost:3001/api/reports/balance-sheet
