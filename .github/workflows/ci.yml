@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  frontend:
+    name: Frontend type-check & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type-check + build
+        working-directory: frontend
+        run: npm run build
+
+  backend:
+    name: Backend smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Start server & smoke test
+        working-directory: backend
+        run: |
+          node server.js &
+          SERVER_PID=$!
+          sleep 2
+          echo "--- dashboard ---"
+          curl --fail --silent http://localhost:3001/api/dashboard | head -c 200
+          echo ""
+          echo "--- balance sheet balances ---"
+          curl --fail --silent http://localhost:3001/api/reports/balance-sheet | head -c 200
+          echo ""
+          kill $SERVER_PID

@@ -1,7 +1,6 @@
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { fmt, getBaseInfo } from '../state';
 import type { Settings, SalesDoc, PurchaseDoc, Contact } from '../types';
+import type { jsPDF } from 'jspdf';
 
 const ACCENT = '#0f766e';
 const MUTED = '#6b7280';
@@ -61,7 +60,8 @@ const titleFor = (doc: SalesDoc | PurchaseDoc) => {
   return map[doc.type] || doc.type.toUpperCase();
 };
 
-export function downloadDocPdf(doc: SalesDoc | PurchaseDoc, party: Contact | undefined, settings: Settings) {
+export async function downloadDocPdf(doc: SalesDoc | PurchaseDoc, party: Contact | undefined, settings: Settings) {
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
   const pdf = new jsPDF();
   const base = getBaseInfo();
   const isBill = doc.type === 'bill';
@@ -140,7 +140,8 @@ export function downloadDocPdf(doc: SalesDoc | PurchaseDoc, party: Contact | und
   pdf.save(`${doc.number.replace(/[/\\]/g, '-')}.pdf`);
 }
 
-export function downloadReportPdf({ title, sub, head, body }: { title: string; sub: string; head: string[][]; body: (string | number)[][] }) {
+export async function downloadReportPdf({ title, sub, head, body }: { title: string; sub: string; head: string[][]; body: (string | number)[][] }) {
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
   const pdf = new jsPDF();
   const base = getBaseInfo();
 

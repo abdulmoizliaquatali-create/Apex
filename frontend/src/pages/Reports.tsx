@@ -40,8 +40,7 @@ export default function Reports() {
       sub: `${meta?.label} · ${from} → ${to} · Generated ${new Date().toLocaleString()} · Amounts in ${base?.symbol || '$'} (${base?.code || 'USD'})`,
       head: [rows[0].map(String)],
       body: rows.slice(1)
-    });
-    toast('PDF exported');
+    }).then(() => toast('PDF exported'));
   }
 
   const meta = REPORTS.find((r) => r.id === report);
@@ -115,7 +114,7 @@ function ReportTable({ cols, rows, footer, exportBtn, pdfBtn }: { cols: string[]
 }
 
 function ProfitLoss({ from, to, onExport, onPdf }: { from: string; to: string; onExport: (rows: (string | number)[][]) => void; onPdf: (rows: (string | number)[][]) => void }) {
-  const { data, err } = useReport<{ rows: any[]; income: number; expense: number; netProfit: number }>(`/api/reports/profit-loss?from=${from}&to=${to}`, from + to);
+  const { data, err } = useReport<{ rows: any[]; income: number; expense: number; netProfit: number }>(`/reports/profit-loss?from=${from}&to=${to}`, from + to);
   if (err) return <Empty icon="reports" title="Failed to load" sub={err} />;
   if (!data) return <Skeleton height={300} />;
 
@@ -181,7 +180,7 @@ function ProfitLoss({ from, to, onExport, onPdf }: { from: string; to: string; o
 }
 
 function BalanceSheet({ onExport, onPdf }: { onExport: (rows: (string | number)[][]) => void; onPdf: (rows: (string | number)[][]) => void }) {
-  const { data, err } = useReport<{ byType: Record<string, any[]>; assets: number; liabilities: number; equity: number; netProfit: number; balanced: boolean }>('/api/reports/balance-sheet');
+  const { data, err } = useReport<{ byType: Record<string, any[]>; assets: number; liabilities: number; equity: number; netProfit: number; balanced: boolean }>('/reports/balance-sheet');
   if (err) return <Empty icon="reports" title="Failed to load" sub={err} />;
   if (!data) return <Skeleton height={300} />;
 
@@ -242,7 +241,7 @@ function BalanceSheet({ onExport, onPdf }: { onExport: (rows: (string | number)[
 }
 
 function CashFlow({ from, to, onExport, onPdf }: { from: string; to: string; onExport: (rows: (string | number)[][]) => void; onPdf: (rows: (string | number)[][]) => void }) {
-  const { data, err } = useReport<{ inflow: number; outflow: number; net: number; categories: Record<string, number> }>(`/api/reports/cash-flow?from=${from}&to=${to}`, from + to);
+  const { data, err } = useReport<{ inflow: number; outflow: number; net: number; categories: Record<string, number> }>(`/reports/cash-flow?from=${from}&to=${to}`, from + to);
   if (err) return <Empty icon="reports" title="Failed to load" sub={err} />;
   if (!data) return <Skeleton height={300} />;
 
@@ -282,7 +281,7 @@ function CashFlow({ from, to, onExport, onPdf }: { from: string; to: string; onE
 function SalesAnalysis({ from, to, onExport, onPdf }: { from: string; to: string; onExport: (rows: (string | number)[][]) => void; onPdf: (rows: (string | number)[][]) => void }) {
   const { sales } = useData();
   const [groupBy, setGroupBy] = useState('customer');
-  const { data, err } = useReport<{ rows: { name: string; count: number; revenue: number; units: number }[]; total: number }>(`/api/reports/sales-analysis?from=${from}&to=${to}&groupBy=${groupBy}`, from + to + groupBy);
+  const { data, err } = useReport<{ rows: { name: string; count: number; revenue: number; units: number }[]; total: number }>(`/reports/sales-analysis?from=${from}&to=${to}&groupBy=${groupBy}`, from + to + groupBy);
   if (err) return <Empty icon="reports" title="Failed to load" sub={err} />;
   if (!data) return <Skeleton height={300} />;
 
@@ -325,7 +324,7 @@ function SalesAnalysis({ from, to, onExport, onPdf }: { from: string; to: string
 }
 
 function PurchaseAnalysis({ from, to, onExport, onPdf }: { from: string; to: string; onExport: (rows: (string | number)[][]) => void; onPdf: (rows: (string | number)[][]) => void }) {
-  const { data, err } = useReport<{ rows: { name: string; count: number; total: number }[]; total: number }>(`/api/reports/purchase-analysis?from=${from}&to=${to}`, from + to);
+  const { data, err } = useReport<{ rows: { name: string; count: number; total: number }[]; total: number }>(`/reports/purchase-analysis?from=${from}&to=${to}`, from + to);
   if (err) return <Empty icon="reports" title="Failed to load" sub={err} />;
   if (!data) return <Skeleton height={300} />;
 
@@ -358,7 +357,7 @@ function PurchaseAnalysis({ from, to, onExport, onPdf }: { from: string; to: str
 }
 
 function InventoryValuation({ onExport, onPdf }: { onExport: (rows: (string | number)[][]) => void; onPdf: (rows: (string | number)[][]) => void }) {
-  const { data, err } = useReport<{ rows: any[]; total: number; totalRetail: number }>('/api/reports/inventory-valuation');
+  const { data, err } = useReport<{ rows: any[]; total: number; totalRetail: number }>('/reports/inventory-valuation');
   if (err) return <Empty icon="reports" title="Failed to load" sub={err} />;
   if (!data) return <Skeleton height={300} />;
 
@@ -397,7 +396,7 @@ function InventoryValuation({ onExport, onPdf }: { onExport: (rows: (string | nu
 }
 
 function Aging({ onExport, onPdf }: { onExport: (rows: (string | number)[][]) => void; onPdf: (rows: (string | number)[][]) => void }) {
-  const { data, err } = useReport<{ ar: any[]; ap: any[]; arBuckets: Record<string, number>; apBuckets: Record<string, number>; arTotal: number; apTotal: number }>('/api/reports/aging');
+  const { data, err } = useReport<{ ar: any[]; ap: any[]; arBuckets: Record<string, number>; apBuckets: Record<string, number>; arTotal: number; apTotal: number }>('/reports/aging');
   if (err) return <Empty icon="reports" title="Failed to load" sub={err} />;
   if (!data) return <Skeleton height={300} />;
 

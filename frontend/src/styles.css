@@ -412,3 +412,105 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .nav-item { justify-content: center; }
   .sidebar-footer { display: none; }
 }
+
+/* =========================================================
+   UI/UX polish & motion
+   ========================================================= */
+
+::selection { background: rgba(13, 148, 136, 0.22); }
+
+:focus-visible { outline: 2px solid var(--primary-2); outline-offset: 2px; }
+
+/* Buttons — press feedback + primary gradient */
+.btn { transition: background 0.15s, border-color 0.15s, transform 0.08s, box-shadow 0.15s, color 0.15s; }
+.btn:active:not(:disabled) { transform: translateY(1px) scale(0.985); }
+.btn-primary {
+  background: linear-gradient(135deg, #0d9488, #0f766e);
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.35);
+}
+.btn-primary:hover:not(:disabled) { box-shadow: 0 4px 14px rgba(13, 148, 136, 0.45); filter: brightness(1.04); }
+.btn-secondary { transition: all 0.15s; }
+
+/* Cards — gentle lift */
+.card { transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s; }
+.card-hover:hover, .product-card:hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+}
+.stat { transition: box-shadow 0.2s, transform 0.2s; }
+.stat:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
+
+/* Nav items — active indicator bar */
+.nav-item { position: relative; transition: background 0.15s, color 0.15s, padding-left 0.15s; }
+.nav-item:hover { padding-left: 13px; }
+.nav-item.active::before {
+  content: ''; position: absolute; left: 0; top: 20%; bottom: 20%; width: 3px;
+  border-radius: 3px; background: var(--primary-2);
+}
+
+/* Tabs — active pill animation */
+.tab { transition: background 0.15s, color 0.15s, transform 0.1s, box-shadow 0.15s; }
+.tab:active { transform: scale(0.97); }
+.tab.active { animation: tabPop 0.22s ease; }
+@keyframes tabPop { 0% { transform: scale(0.92); } 60% { transform: scale(1.04); } 100% { transform: scale(1); } }
+
+/* Table rows */
+tbody tr { transition: background 0.12s; }
+
+/* Stat cards — staggered entrance */
+.stat { animation: fadeUp 0.35s ease both; }
+.stat:nth-child(1) { animation-delay: 0.03s; }
+.stat:nth-child(2) { animation-delay: 0.06s; }
+.stat:nth-child(3) { animation-delay: 0.09s; }
+.stat:nth-child(4) { animation-delay: 0.12s; }
+.stat:nth-child(5) { animation-delay: 0.15s; }
+.stat:nth-child(6) { animation-delay: 0.18s; }
+.card-enter { animation: fadeUp 0.3s ease both; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Modal overlay + panel */
+.modal-overlay { animation: overlayIn 0.18s ease; }
+@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+.modal { animation: pop 0.22s cubic-bezier(0.18, 1.25, 0.4, 1); }
+
+/* Toast — entrance slide + drop */
+.toast { animation: toastIn 0.28s cubic-bezier(0.18, 1.25, 0.4, 1); }
+@keyframes toastIn { from { transform: translateX(24px) translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Low-stock / alert badge pulse */
+.nav-badge { animation: pulseSoft 2s ease-in-out infinite; }
+@keyframes pulseSoft {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+  50% { box-shadow: 0 0 0 5px rgba(220, 38, 38, 0); }
+}
+.nav-badge.teal { animation-name: pulseTeal; }
+@keyframes pulseTeal {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.45); }
+  50% { box-shadow: 0 0 0 5px rgba(13, 148, 136, 0); }
+}
+
+/* Progress bar — shimmering fill */
+.progress > div { transition: width 0.6s ease; background: linear-gradient(90deg, var(--primary-2), #2dd4bf); }
+
+/* Money/stat values — tabular + subtle transition */
+.stat-value, .money { font-variant-numeric: tabular-nums; }
+
+/* Currency switcher items */
+.cur-item { transition: background 0.12s, transform 0.08s; }
+.cur-item:hover { transform: translateX(2px); }
+
+/* Skeleton — smoother shimmer */
+.skeleton { animation: shimmer 1.5s ease-in-out infinite; }
+
+/* Page loader block spacing */
+.page-loader { gap: 14px; }
+
+/* Search pop — slide down */
+.search-pop, .cur-pop { animation: popDown 0.16s ease; }
+@keyframes popDown { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .stat, .card-enter, .modal, .modal-overlay, .toast, .search-pop, .cur-pop,
+  .tab, .nav-badge, .nav-item, .btn, .product-card, .card-hover { animation: none !important; transition: none !important; }
+}

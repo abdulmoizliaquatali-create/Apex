@@ -1,35 +1,65 @@
+<div align="center">
+
 # Apex Gloves International — Trading & Accounting Suite
 
-A full-stack ERP for a Karachi-based glove importer/exporter. It covers the complete
-order-to-cash and procure-to-pay cycles with double-entry bookkeeping, multi-currency
-support, import shipments, inventory, banking, and financial reporting.
+**Full-stack ERP for a Karachi-based glove importer/exporter**
 
-Demo data ships pre-seeded and is fully self-consistent: every journal entry is
-double-entry, the balance sheet balances, and the inventory ledger matches on-hand stock.
+Order-to-cash and procure-to-pay cycles · double-entry bookkeeping · multi-currency ·
+import shipments · inventory · banking · financial reporting
+
+![Built with](https://img.shields.io/badge/Frontend-React%2018%20%2B%20Vite%20%2B%20TS-61dafb)
+![Backend](https://img.shields.io/badge/Backend-Express%20%2F%20Node%2022-339933)
+![Database](https://img.shields.io/badge/Database-JSON%20file%20persistence-8a97ab)
+![Language](https://img.shields.io/badge/Base%20currency-PKR%20%E2%82%A8-brightgreen)
+![License](https://img.shields.io/badge/License-MIT-blue)
+
+</div>
+
+Apex ERP is a complete, self-contained business management suite for a Pakistani
+glove trading company. It covers the full **order-to-cash** and **procure-to-pay**
+lifecycles backed by real double-entry accounting. Demo data ships pre-seeded and is
+fully self-consistent: every journal entry balances, the balance sheet balances, and
+the inventory ledger matches on-hand stock exactly.
+
+## Highlights
+
+- **Base currency PKR (₨)** — reporting is in Pakistani Rupees; USD/CNY/VND/EUR/GBP/AED
+  transactions are stored internally in USD and converted for reporting. The base
+  currency is switchable by an admin from Settings or the header currency switcher.
+- **One-click document workflow** — quotation → sales order → invoice → payment, and
+  purchase order → receive goods → bill → payment. Cancelling a document voids its
+  payments, reverses the journal entries, and restores stock automatically.
+- **Provably balanced books** — every posting creates a balanced `journalEntries`
+  row; P&L, balance sheet, and cash flow are derived directly from the ledger.
+- **PDF invoices & reports** — branded PDF export for every document and report,
+  lazy-loaded so the main bundle stays lean.
 
 ## Stack
 
-- **Frontend**: Vite + React + TypeScript (SPA, dark sidebar, responsive tables)
-- **Backend**: Express (Node.js), JSON-file persistence at `backend/data/db.json`
-- **Currency**: USD base; FX rates for PKR, CNY, VND, EUR, GBP, AED
+| Layer     | Tech                                                        |
+|-----------|-------------------------------------------------------------|
+| Frontend  | Vite + React 18 + TypeScript, React Router, recharts, jsPDF |
+| Backend   | Express (Node.js), JSON-file persistence                    |
+| Data      | `backend/data/db.json` (gitignored)                         |
+| Currency  | PKR base; FX rates for USD, CNY, VND, EUR, GBP, AED         |
 
 ## Features
 
-- **Sales**: quotations → sales orders → invoices → credit notes → customer payments.
-  Invoice tax line (configurable name/rate in Settings), overdue detection.
-- **Purchasing**: purchase orders → supplier bills → supplier payments → import
-  shipments view (goods value, freight, customs & duties for overseas suppliers).
-- **Inventory**: product catalog with stock levels, reorder points, low-stock alerts,
-  stock movement history, and inventory valuation. Stock adjustments post to the
-  general ledger automatically.
-- **Banking**: multi-account cash position, per-account running balance from the
-  journal, bank transaction entry (expense/income), CSV export, backup export.
-- **Accounting**: chart of accounts (create accounts with opening balances),
-  journal & general ledger, double-entry posting for all documents.
-- **Reports**: profit & loss, balance sheet, cash flow, inventory valuation,
-  sales analysis (by customer/product), purchase analysis, AR/AP aging.
-- **Contacts**: customers & suppliers with credit limits, per-contact statements.
-- **Extras**: global search in the top bar, document duplication, CSV exports.
+- **Sales** — quotations → sales orders → invoices → credit notes → customer
+  payments. Configurable tax line, overdue detection, one-click convert.
+- **Purchasing** — purchase orders → receive goods → supplier bills → supplier
+  payments, plus an import-shipments view (goods value, freight, customs & duties).
+- **Inventory** — catalog with stock levels, reorder points, low-stock alerts,
+  stock movement history, valuation, and GL-posting stock adjustments.
+- **Banking** — multi-account cash position, per-account running balance from the
+  journal, expense/income entries, CSV export, backup export.
+- **Accounting** — chart of accounts with opening balances, journal & general
+  ledger, automatic double-entry posting for all documents.
+- **Reports** — profit & loss, balance sheet, cash flow, inventory valuation,
+  sales analysis, purchase analysis, AR/AP aging — all exportable to PDF/CSV.
+- **Contacts** — customers & suppliers with credit limits and per-contact statements.
+- **Extras** — global search, document duplication, dark sidebar shell,
+  animated loading states (count-up KPIs, skeleton loaders, page transitions).
 
 ## Getting started
 
@@ -59,7 +89,8 @@ cd frontend && npm run dev
 
 ### Reset demo data
 
-`POST /api/reset` re-seeds the database. Reset from the UI in Settings, or:
+`POST /api/reset` re-seeds the database from `backend/seed.js`. Reset from the UI
+(Settings → Admin) or via:
 
 ```bash
 curl -X POST http://localhost:3001/api/reset -H 'Content-Type: application/json' -d '{}'
@@ -78,11 +109,12 @@ curl -X POST http://localhost:3001/api/reset -H 'Content-Type: application/json'
 
 ```
 frontend/                  Vite + React + TS single-page app
-  src/api.ts               fetch wrapper for /api
+  src/api.ts               fetch wrapper for /api (auto-prefixes requests)
   src/state.tsx            DataProvider (settings, docs, journal, dashboard)
   src/components/          Layout, DocumentModal, DocDetail, ui kit
   src/pages/               Dashboard, Sales, Purchases, Products, Contacts,
                            Banking, Accounting, Reports, Settings
+  src/utils/pdf.ts         lazy-loaded jsPDF document/report exporter
 backend/
   server.js                Express routes, reports, generic CRUD, duplication
   ledger.js                double-entry posting (invoices, bills, payments…)
@@ -93,19 +125,38 @@ backend/
 
 ### Data model
 
-`COLLECTIONS = ['contacts','products','accounts','sales','purchases',
-'bankAccounts','bankTransactions','journalEntries','currencies']`
+```
+COLLECTIONS = ['contacts','products','accounts','sales','purchases',
+'bankAccounts','bankTransactions','journalEntries','currencies']
+```
 
 Every posting creates a balanced `journalEntries` row (two or more lines, debits =
 credits). Reports (P&L, balance sheet, cash flow) are derived from the journal and
 document collections, so the books provably balance.
 
+### Currency model
+
+- The ledger stores **USD** as its internal unit of account.
+- Each currency has a `rate` vs USD (e.g. PKR 278, EUR 0.92).
+- Documents are entered in their own currency and converted to USD on posting.
+- The **reporting base** (`settings.baseCurrency`, default **PKR**) determines how
+  every screen formats money via the shared `fmt()` helper.
+
 ## Verification
 
 ```bash
 # type-check + build the frontend
+cd frontend && npm run build
 
-# after any seed/server change, restart backend and confirm:
+# after any seed/server change, restart backend and confirm books balance
 curl http://localhost:3001/api/reports/balance-sheet
 # assets == liabilities + equity + net profit
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+[MIT](LICENSE)

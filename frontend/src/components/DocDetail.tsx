@@ -55,8 +55,7 @@ export default function DocDetail({ doc, kind, onClose, onUpdated }: { doc: Sale
 
   function downloadPdf() {
     try {
-      downloadDocPdf(doc, party, settings);
-      toast('PDF downloaded');
+      downloadDocPdf(doc, party, settings).then(() => toast('PDF downloaded'));
     } catch (e) {
       toast('PDF export failed: ' + (e as Error).message, 'error');
     }

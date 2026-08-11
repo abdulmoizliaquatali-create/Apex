@@ -17,11 +17,11 @@ export function seed() {
       phone: '+92 21 3456 7890', email: 'sales@apexgloves.com',
       website: 'www.apexgloves.com', taxId: 'PK-7744311-2'
     },
-    baseCurrency: 'USD', fiscalYearStart: '2026-01-01',
+    baseCurrency: 'PKR', fiscalYearStart: '2026-01-01',
     tax: { name: 'Sales Tax', rate: 0 }, lowStockThreshold: 800,
     preferences: {
       invoiceDueDays: 30, billDueDays: 45, quotationValidDays: 30,
-      receiptBankAccountId: 'ba1', paymentBankAccountId: 'ba1', defaultCurrency: 'USD'
+      receiptBankAccountId: 'ba3', paymentBankAccountId: 'ba3', defaultCurrency: 'PKR'
     },
     modules: {
       sales: true, purchases: true, inventory: true, banking: true, accounting: true, reports: true
@@ -34,11 +34,11 @@ export function seed() {
   };
 
   db.currencies = [
-    { id: 'cur_usd', code: 'USD', name: 'US Dollar', symbol: '$', rate: 1, base: true },
+    { id: 'cur_pkr', code: 'PKR', name: 'Pakistani Rupee', symbol: '₨ ', rate: 278, base: true },
+    { id: 'cur_usd', code: 'USD', name: 'US Dollar', symbol: '$', rate: 1, base: false },
     { id: 'cur_eur', code: 'EUR', name: 'Euro', symbol: '€', rate: 0.92, base: false },
     { id: 'cur_gbp', code: 'GBP', name: 'British Pound', symbol: '£', rate: 0.79, base: false },
     { id: 'cur_aed', code: 'AED', name: 'UAE Dirham', symbol: 'AED ', rate: 3.67, base: false },
-    { id: 'cur_pkr', code: 'PKR', name: 'Pakistani Rupee', symbol: '₨ ', rate: 278, base: false },
     { id: 'cur_cny', code: 'CNY', name: 'Chinese Yuan', symbol: '¥', rate: 7.22, base: false },
     { id: 'cur_vnd', code: 'VND', name: 'Vietnamese Dong', symbol: '₫', rate: 25400, base: false }
   ];

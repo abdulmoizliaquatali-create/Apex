@@ -1,4 +1,4 @@
-import { ReactNode, CSSProperties } from 'react';
+import { ReactNode, CSSProperties, useRef, useEffect } from 'react';
 import { fmt, curSymbol } from '../state';
 import type { Currency } from '../types';
 
@@ -78,7 +78,7 @@ export function Modal({ title, children, foot, onClose, size }: { title: ReactNo
   );
 }
 
-export function Stat({ label, value, foot, tone, icon }: { label: string; value: string; foot?: ReactNode; tone?: string; icon?: string }) {
+export function Stat({ label, value, foot, tone, icon }: { label: string; value: ReactNode; foot?: ReactNode; tone?: string; icon?: string }) {
   return (
     <div className={`stat ${tone || 'teal'}`}>
       <div className="stat-label">{icon && <Icon name={icon} size={15} />}{label}</div>
@@ -101,6 +101,35 @@ export function Empty({ icon = 'box', title, sub, action }: { icon?: string; tit
 
 export function Money({ value, symbol = '$', cls = 'money' }: { value: number; symbol?: string; cls?: string }) {
   return <span className={cls}>{fmt(value, symbol)}</span>;
+}
+
+// Animated number — counts up to the target on mount with ease-out, respecting reduced motion.
+export function CountUp({ value, format, duration = 650 }: { value: number; format?: (n: number) => string; duration?: number }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const prevRef = useRef(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const from = prevRef.current;
+    const to = value;
+    prevRef.current = to;
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      el.textContent = format ? format(to) : String(to);
+      return;
+    }
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      const current = from + (to - from) * eased;
+      el.textContent = format ? format(current) : String(Math.round(current));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, format, duration]);
+  return <span ref={ref} />;
 }
 
 export function MoneyCell({ value, currency, currencies }: { value: number; currency: string; currencies: Currency[] }) {

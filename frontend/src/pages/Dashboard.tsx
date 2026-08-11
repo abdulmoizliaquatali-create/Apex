@@ -1,5 +1,5 @@
 import { useData, fmt, fmtQty } from '../state';
-import { Stat, Icon, Empty } from '../components/ui';
+import { Stat, Icon, Empty, CountUp } from '../components/ui';
 import { BarChart, DonutChart } from '../components/Charts';
 import { Link } from 'react-router-dom';
 
@@ -31,10 +31,10 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-4">
-        <Stat tone="teal" icon="money" label="Revenue (YTD)" value={fmt(k.revenue)} foot={`${fmt(k.monthRevenue)} in ${dashboard.monthLabel}`} />
-        <Stat tone="green" icon="trend" label="Net Profit" value={fmt(k.revenue - k.expense)} foot="Revenue minus COGS & expenses" />
-        <Stat tone="amber" icon="wallet" label="Cash on Hand" value={fmt(k.cash)} foot="Main business account" />
-        <Stat tone="red" icon="box" label="Inventory Value" value={fmt(k.invValue)} foot={`${fmtQty(totalUnits)} units on hand`} />
+        <Stat tone="teal" icon="money" label="Revenue (YTD)" value={<CountUp value={k.revenue} format={fmt} />} foot={`${fmt(k.monthRevenue)} in ${dashboard.monthLabel}`} />
+        <Stat tone="green" icon="trend" label="Net Profit" value={<CountUp value={k.revenue - k.expense} format={fmt} />} foot="Revenue minus COGS & expenses" />
+        <Stat tone="amber" icon="wallet" label="Cash on Hand" value={<CountUp value={k.cash} format={fmt} />} foot="Main business account" />
+        <Stat tone="red" icon="box" label="Inventory Value" value={<CountUp value={k.invValue} format={fmt} />} foot={`${fmtQty(totalUnits)} units on hand`} />
       </div>
 
       <div className="grid grid-4 mt-16">

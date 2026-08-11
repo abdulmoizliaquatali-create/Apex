@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useData, fmt, today } from '../state';
 import { useToast } from '../toast';
 import { api } from '../api';
-import { PageHead, Icon, Modal, Field, Empty } from '../components/ui';
+import { PageHead, Icon, Modal, Field, Empty, CountUp } from '../components/ui';
 
 export default function Banking() {
   const { bankAccounts, journal, accounts, currencies, refresh, refreshDashboard } = useData();
@@ -84,7 +84,7 @@ export default function Banking() {
               </div>
               <div className="avatar" style={{ background: 'var(--primary-soft)', color: 'var(--primary-dark)' }}><Icon name="bank" size={18} /></div>
             </div>
-            <div className="strong" style={{ fontSize: 24, marginTop: 14 }}>{fmt(b.balance)}</div>
+            <div className="strong" style={{ fontSize: 24, marginTop: 14 }}><CountUp value={b.balance} format={fmt} /></div>
             <div className="tiny muted">Available · {b.currency}</div>
           </div>
         ))}
@@ -93,7 +93,7 @@ export default function Banking() {
       <div className="card">
         <div className="flex-between" style={{ padding: '18px 20px 0' }}>
           <div className="card-title">Bank Activity</div>
-          <div className="tiny muted">Total cash: <span className="strong">{fmt(totalBalance)}</span></div>
+          <div className="tiny muted">Total cash: <span className="strong"><CountUp value={totalBalance} format={fmt} /></span></div>
         </div>
         <div className="table-wrap">
           <table>

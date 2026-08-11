@@ -8,12 +8,12 @@ import type { Product, LineItem } from '../types';
 export type DocType = 'invoice' | 'quotation' | 'salesOrder' | 'creditNote' | 'bill' | 'purchaseOrder';
 
 const CONFIG: Record<DocType, { title: string; kind: 'customer' | 'supplier'; api: string; extra?: string }> = {
-  invoice: { title: 'New Invoice', kind: 'customer', api: '/api/sales' },
-  quotation: { title: 'New Quotation', kind: 'customer', api: '/api/sales' },
-  salesOrder: { title: 'New Sales Order', kind: 'customer', api: '/api/sales' },
-  creditNote: { title: 'New Credit Note', kind: 'customer', api: '/api/sales' },
-  bill: { title: 'New Supplier Bill', kind: 'supplier', api: '/api/purchases' },
-  purchaseOrder: { title: 'New Purchase Order', kind: 'supplier', api: '/api/purchases' }
+  invoice: { title: 'New Invoice', kind: 'customer', api: '/sales' },
+  quotation: { title: 'New Quotation', kind: 'customer', api: '/sales' },
+  salesOrder: { title: 'New Sales Order', kind: 'customer', api: '/sales' },
+  creditNote: { title: 'New Credit Note', kind: 'customer', api: '/sales' },
+  bill: { title: 'New Supplier Bill', kind: 'supplier', api: '/purchases' },
+  purchaseOrder: { title: 'New Purchase Order', kind: 'supplier', api: '/purchases' }
 };
 
 const PRICING: Record<DocType, 'sell' | 'cost'> = {
@@ -29,7 +29,8 @@ export default function DocumentModal({ type, onClose, onCreated }: { type: DocT
   const partyList = useMemo(() => contacts.filter((c) => c.kind === cfg.kind && c.active), [contacts, cfg.kind]);
   const [partyId, setPartyId] = useState('');
   const party = partyList.find((c) => c.id === partyId);
-  const [currency, setCurrency] = useState(party?.currency || 'USD');
+  const defaultCur = settings?.preferences?.defaultCurrency || settings?.baseCurrency || 'USD';
+  const [currency, setCurrency] = useState(party?.currency || defaultCur);
   const [date, setDate] = useState(today());
   const [dueDate, setDueDate] = useState(today());
   const [validUntil, setValidUntil] = useState(today());

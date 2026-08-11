@@ -126,7 +126,7 @@ function ProfileTab() {
 
 // ---------------- Preferences ----------------
 function PreferencesTab() {
-  const { settings, bankAccounts, refresh } = useData();
+  const { settings, bankAccounts, currencies, refresh } = useData();
   const toast = useToast();
   const [prefs, setPrefs] = useState<Record<string, unknown>>(settings?.preferences || { invoiceDueDays: 30, billDueDays: 45, quotationValidDays: 30, receiptBankAccountId: 'ba1', paymentBankAccountId: 'ba1', defaultCurrency: 'USD' });
   const [saving, setSaving] = useState(false);
@@ -153,7 +153,11 @@ function PreferencesTab() {
           <Field label="Invoice Due Days"><input type="number" className="input" min="0" value={Number(prefs.invoiceDueDays) || 0} onChange={(e) => set('invoiceDueDays', +e.target.value)} /></Field>
           <Field label="Supplier Bill Due Days"><input type="number" className="input" min="0" value={Number(prefs.billDueDays) || 0} onChange={(e) => set('billDueDays', +e.target.value)} /></Field>
           <Field label="Quotation Validity (Days)"><input type="number" className="input" min="0" value={Number(prefs.quotationValidDays) || 0} onChange={(e) => set('quotationValidDays', +e.target.value)} /></Field>
-          <Field label="Default Currency"><input className="input" value={String(prefs.defaultCurrency || 'USD')} onChange={(e) => set('defaultCurrency', e.target.value)} /></Field>
+          <Field label="Default Currency">
+            <select className="select" value={String(prefs.defaultCurrency || 'USD')} onChange={(e) => set('defaultCurrency', e.target.value)}>
+              {currencies.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+            </select>
+          </Field>
           <Field label="Receipts Bank Account">
             <select className="select" value={String(prefs.receiptBankAccountId || '')} onChange={(e) => set('receiptBankAccountId', e.target.value)}>
               {bankAccounts.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
