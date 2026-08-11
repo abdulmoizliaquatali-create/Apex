@@ -1,0 +1,24 @@
+# Render blueprint — one-click deploy of Apex ERP from GitHub.
+# Docs: https://render.com/docs/blueprint-spec
+#
+# How to deploy:
+#   1. Push this repo to GitHub.
+#   2. In the Render dashboard: New -> Blueprint -> select the repo.
+#   3. Render reads this file, builds the frontend, and starts the API
+#      which also serves the built SPA on the same origin.
+#
+# Note: the free plan uses an ephemeral filesystem, so demo data resets on
+# every redeploy. Sleeps after ~15 min idle; wakes automatically on request.
+
+services:
+  - type: web
+    name: apex-erp
+    runtime: node
+    rootDir: .
+    plan: free
+    buildCommand: cd frontend && npm ci && npm run build && cd ../backend && npm ci
+    startCommand: cd backend && node server.js
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production

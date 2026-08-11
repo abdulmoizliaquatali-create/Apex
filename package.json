@@ -1,0 +1,14 @@
+{
+  "name": "apex-erp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Apex Gloves International — Trading & Accounting Suite (frontend + backend)",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "./start.sh",
+    "build": "cd frontend && npm run build",
+    "start": "cd backend && node server.js"
+  }
+}

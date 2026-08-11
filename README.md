@@ -96,6 +96,22 @@ cd frontend && npm run dev
 curl -X POST http://localhost:3001/api/reset -H 'Content-Type: application/json' -d '{}'
 ```
 
+## Deploy for free (Render)
+
+The repo includes a `render.yaml` blueprint that deploys **both** the frontend and
+backend as a single free web service — the Express API also serves the built SPA,
+so everything lives at one URL with no CORS.
+
+1. Push this repository to GitHub.
+2. In the Render dashboard: **New → Blueprint** → connect the repo.
+3. Render reads `render.yaml`, builds the frontend (`npm run build`), and starts
+   the backend, which serves the SPA at `/` and the API under `/api`.
+
+> **Free-tier caveats:** the instance sleeps after ~15 minutes of inactivity and
+> wakes on the next request (first load takes ~30–50 s). The filesystem is
+> ephemeral — data is re-seeded on every redeploy. For persistent data, switch
+> the store to a hosted database (e.g. Supabase free tier).
+
 ## Scripts
 
 | Project  | Script          | Purpose                                  |

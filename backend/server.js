@@ -1,5 +1,8 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { store, round, uid } from './store.js';
 import { seed } from './seed.js';
 import { convert, lineTotals, postInvoice, postCustomerPayment, postBill, postSupplierPayment, postBankTransaction, createSalesDoc, createPurchaseDoc, convertSalesDoc, receivePurchaseOrder, adjustStock, cancelDoc } from './ledger.js';
@@ -564,6 +567,18 @@ app.delete('/api/:col/:id', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
+
+// ---------------- Static frontend (production) ----------------
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const distDir = path.join(__dirname, '..', 'frontend', 'dist');
+if (fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+  app.get(/^(?!\/api\/).*/, (req, res) => res.sendFile(path.join(distDir, 'index.html')));
+  console.log('Serving built frontend from', distDir);
+} else {
+  console.log('frontend/dist not found - running API-only (use Vite dev server for the UI)');
+}
+
 app.listen(PORT, () => {
   console.log(`Apex backend listening on http://localhost:${PORT}`);
 });
