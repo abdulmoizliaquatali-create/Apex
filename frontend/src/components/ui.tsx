@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, CSSProperties } from 'react';
 import { fmt, curSymbol } from '../state';
 import type { Currency } from '../types';
 
@@ -116,12 +116,47 @@ export function Field({ label, children, className = '' }: { label: string; chil
   );
 }
 
-export function Skeleton({ width = '100%', height = 14 }: { width?: string; height?: number }) {
-  return <div className="skeleton" style={{ width, height }} />;
+export function Skeleton({ width = '100%', height = 14, style }: { width?: string | number; height?: number; style?: CSSProperties }) {
+  return <div className="skeleton" style={{ width, height, ...style }} />;
 }
 
-export function Spinner() {
-  return <div className="text-center" style={{ padding: 60 }}><div className="skeleton" style={{ width: 120, height: 14, margin: '0 auto' }} /></div>;
+export function Loader({ size = 26, light = false }: { size?: number; light?: boolean }) {
+  return <div className={`loader ${light ? 'loader-light' : ''}`} style={{ width: size, height: size }} />;
+}
+
+export function Spinner({ label }: { label?: string }) {
+  return (
+    <div className="text-center" style={{ padding: 60 }}>
+      <Loader size={34} />
+      {label && <div className="tiny muted mt-8">{label}</div>}
+    </div>
+  );
+}
+
+// Full-page skeleton shown while the app is booting or a page is refreshing.
+export function PageLoader() {
+  return (
+    <div className="page-loader">
+      <div className="page-loader-head">
+        <div>
+          <Skeleton width={220} height={22} />
+          <Skeleton width={340} height={13} style={{ marginTop: 10 }} />
+        </div>
+        <Skeleton width={120} height={36} />
+      </div>
+      <div className="grid grid-4">
+        {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton" style={{ height: 108 }} />)}
+      </div>
+      <div className="grid mt-16" style={{ gridTemplateColumns: '2fr 1fr' }}>
+        <div className="skeleton" style={{ height: 260 }} />
+        <div className="skeleton" style={{ height: 260 }} />
+      </div>
+      <div className="grid mt-16" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <div className="skeleton" style={{ height: 220 }} />
+        <div className="skeleton" style={{ height: 220 }} />
+      </div>
+    </div>
+  );
 }
 
 export function Toast({ type, message }: { type: 'success' | 'error'; message: string }) {

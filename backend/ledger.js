@@ -19,6 +19,19 @@ export function addJournal(db, entry) {
   db.journalEntries.push({ ...entry, id: uid('je_') });
 }
 
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Map a bank account (or preference) to its general-ledger asset account.
+function bankGlFor(db, bankAccountId, kind) {
+  const prefs = (db.settings && db.settings.preferences) || {};
+  const def = kind === 'receipt' ? prefs.receiptBankAccountId : prefs.paymentBankAccountId;
+  const id = bankAccountId || def;
+  const ba = (db.bankAccounts || []).find((b) => b.id === id);
+  return ba ? ba.accountId || 'bank_main' : 'bank_main';
+}
+
 export function postInvoice(db, p) {
   const { customer, lines, currency, date, taxRate = 0 } = p;
   const num = db.sequences.INV = (db.sequences.INV || 1000) + 1;
@@ -57,13 +70,15 @@ export function postCustomerPayment(db, p) {
   const amountUsd = convert(db, amount, currency);
   invoice.paidUsd = round(invoice.paidUsd + amountUsd);
   if (invoice.paidUsd >= invoice.totalUsd - 0.01) invoice.status = 'paid';
+  const bankAccountId = p.bankAccountId || (db.settings && db.settings.preferences && db.settings.preferences.receiptBankAccountId) || 'ba1';
+  const bankGl = bankGlFor(db, bankAccountId, 'receipt');
   const rec = {
     id: uid('rec_'), type: 'payment', number: 'REC-' + num, date,
     invoiceId: invoice.id, customerId: customer.id, customerName: customer.name,
-    currency, fxRate: cur(db, currency), amount, amountUsd, bankAccountId: p.bankAccountId || 'ba1'
+    currency, fxRate: cur(db, currency), amount, amountUsd, bankAccountId
   };
   db.sales.push(rec);
-  addJournal(db, { date: rec.date, memo: `Payment ${rec.number} - ${customer.name}`, ref: rec.number, docType: 'payment', docId: rec.id, lines: [{ accountId: 'bank_main', debit: amountUsd }, { accountId: 'ar', credit: amountUsd }] });
+  addJournal(db, { date: rec.date, memo: `Payment ${rec.number} - ${customer.name}`, ref: rec.number, docType: 'payment', docId: rec.id, lines: [{ accountId: bankGl, debit: amountUsd }, { accountId: 'ar', credit: amountUsd }] });
   return rec;
 }
 
@@ -107,24 +122,29 @@ export function postSupplierPayment(db, p) {
   const amountUsd = convert(db, amount, currency);
   bill.paidUsd = round(bill.paidUsd + amountUsd);
   if (bill.paidUsd >= bill.totalUsd - 0.01) bill.status = 'paid';
+  const bankAccountId = p.bankAccountId || (db.settings && db.settings.preferences && db.settings.preferences.paymentBankAccountId) || 'ba1';
+  const bankGl = bankGlFor(db, bankAccountId, 'payment');
   const pay = {
     id: uid('pay_'), type: 'supplierPayment', number: 'PAY-' + num, date,
     billId: bill.id, supplierId: supplier.id, supplierName: supplier.name,
-    currency, fxRate: cur(db, currency), amount, amountUsd, bankAccountId: p.bankAccountId || 'ba1'
+    currency, fxRate: cur(db, currency), amount, amountUsd, bankAccountId
   };
   db.purchases.push(pay);
-  addJournal(db, { date: pay.date, memo: `Payment ${pay.number} - ${supplier.name}`, ref: pay.number, docType: 'supplierPayment', docId: pay.id, lines: [{ accountId: 'ap', debit: amountUsd }, { accountId: 'bank_main', credit: amountUsd }] });
+  addJournal(db, { date: pay.date, memo: `Payment ${pay.number} - ${supplier.name}`, ref: pay.number, docType: 'supplierPayment', docId: pay.id, lines: [{ accountId: 'ap', debit: amountUsd }, { accountId: bankGl, credit: amountUsd }] });
   return pay;
 }
 
 export function postBankTransaction(db, p) {
-  const { date, memo, accountId, amountUsd, bankAccountId = 'ba1' } = p;
+  const ba = db.bankAccounts.find((b) => b.id === p.bankAccountId) || db.bankAccounts[0] || { id: 'ba1', accountId: 'bank_main' };
+  const bankAccountId = ba.id;
+  const bankGl = ba.accountId || 'bank_main';
+  const { date, memo, accountId, amountUsd } = p;
   const tx = { id: uid('btx_'), date, memo, accountId, bankAccountId, amountUsd, currency: 'USD', fxRate: 1 };
   db.bankTransactions.push(tx);
   const abs = Math.abs(amountUsd);
   const lines = amountUsd < 0
-    ? [{ accountId, debit: abs }, { accountId: 'bank_main', credit: abs }]
-    : [{ accountId: 'bank_main', debit: abs }, { accountId, credit: abs }];
+    ? [{ accountId, debit: abs }, { accountId: bankGl, credit: abs }]
+    : [{ accountId: bankGl, debit: abs }, { accountId, credit: abs }];
   addJournal(db, { date, memo, ref: tx.id, docType: 'bankTransaction', docId: tx.id, lines });
   return tx;
 }
@@ -165,6 +185,125 @@ export function createPurchaseDoc(db, type, p) {
     expectedDate: p.expectedDate, lines
   };
   db.purchases.push(doc);
+  return doc;
+}
+
+// ---------------- Workflow automation ----------------
+
+// Convert a quotation -> sales order -> invoice (never reposts the same stock).
+export function convertSalesDoc(db, id, to, opts = {}) {
+  const src = db.sales.find((x) => x.id === id);
+  if (!src) throw new Error('document not found');
+  if (src.type !== 'quotation' && src.type !== 'salesOrder') throw new Error('only quotations and sales orders can be converted');
+  if (src.status === 'cancelled') throw new Error('cancelled documents cannot be converted');
+  if (src.status === 'converted') throw new Error('document has already been converted');
+  const customer = db.contacts.find((c) => c.id === src.customerId);
+  if (!customer) throw new Error('customer missing');
+  const lines = (src.lines || []).map((l) => ({ productId: l.productId, qty: l.qty, price: l.price }));
+  let doc;
+  if (to === 'invoice') {
+    const prefs = (db.settings && db.settings.preferences) || {};
+    const taxRate = ((db.settings && db.settings.tax && db.settings.tax.rate) || 0) / 100;
+    doc = postInvoice(db, {
+      customer, lines, currency: src.currency, date: opts.date || today(), taxRate,
+      dueDate: opts.dueDate || addDays(opts.date || today(), prefs.invoiceDueDays || 30)
+    });
+  } else if (to === 'salesOrder') {
+    doc = createSalesDoc(db, 'salesOrder', { customer, lines, currency: src.currency, date: opts.date || today(), status: 'confirmed', expectedDate: opts.expectedDate });
+  } else {
+    throw new Error('unknown target type');
+  }
+  src.status = 'converted';
+  return { converted: src, doc };
+}
+
+// Receive goods against a purchase order -> creates the supplier bill.
+export function receivePurchaseOrder(db, id, opts = {}) {
+  const src = db.purchases.find((x) => x.id === id);
+  if (!src) throw new Error('document not found');
+  if (src.type !== 'purchaseOrder') throw new Error('only purchase orders can be received');
+  if (src.status === 'cancelled') throw new Error('cancelled purchase orders cannot be received');
+  if (src.status === 'received') throw new Error('purchase order has already been received');
+  const supplier = db.contacts.find((c) => c.id === src.supplierId);
+  if (!supplier) throw new Error('supplier missing');
+  const lines = (src.lines || []).map((l) => ({ productId: l.productId, qty: l.qty, price: l.price }));
+  const prefs = (db.settings && db.settings.preferences) || {};
+  const date = opts.date || today();
+  const bill = postBill(db, {
+    supplier, lines, currency: src.currency, date,
+    dueDate: opts.dueDate || addDays(date, prefs.billDueDays || 45),
+    freightUsd: opts.freightUsd || 0, customsUsd: opts.customsUsd || 0
+  });
+  src.status = 'received';
+  return { received: src, bill };
+}
+
+// Manual stock adjustment (positive to add, negative to remove).
+export function adjustStock(db, product, deltaQty, memo) {
+  const oldQty = product.qty || 0;
+  const newQty = Math.max(0, oldQty + deltaQty);
+  const deltaVal = round((newQty - oldQty) * (product.cost || 0));
+  if (!deltaVal && newQty === oldQty) return { product, delta: 0 };
+  product.qty = newQty;
+  const desc = memo || `Stock adjustment - ${product.sku} ${product.name}`;
+  const lines = deltaVal > 0
+    ? [{ accountId: 'inventory', debit: deltaVal }, { accountId: 'inv_adj', credit: deltaVal }]
+    : [{ accountId: 'inventory', credit: -deltaVal }, { accountId: 'inv_adj', debit: -deltaVal }];
+  if (deltaVal) addJournal(db, { date: today(), memo: desc, ref: product.sku, docType: 'stockAdjustment', docId: product.id, lines });
+  return { product, delta: deltaQty };
+}
+
+function reverseLines(lines) {
+  return lines.map((l) => ({ accountId: l.accountId, debit: l.credit || 0, credit: l.debit || 0 }));
+}
+
+function voidJournal(db, doc, filter) {
+  for (const je of db.journalEntries.filter((j) => j.docType === filter && j.docId === doc.id)) {
+    addJournal(db, { date: today(), memo: `Void ${je.memo}`, ref: je.ref, docType: 'void', docId: doc.id, lines: reverseLines(je.lines) });
+  }
+}
+
+// Void/cancel a document, reversing every posting it made.
+export function cancelDoc(db, doc) {
+  if (doc.status === 'cancelled') return doc;
+  // Automatically void any payments linked to this document.
+  const linkedPayments = doc.type === 'invoice'
+    ? db.sales.filter((x) => x.type === 'payment' && x.invoiceId === doc.id && x.status !== 'cancelled')
+    : doc.type === 'bill'
+      ? db.purchases.filter((x) => x.type === 'supplierPayment' && x.billId === doc.id && x.status !== 'cancelled')
+      : [];
+  for (const pay of linkedPayments) cancelDoc(db, pay);
+
+  if (doc.type === 'invoice') {
+    voidJournal(db, doc, 'invoice');
+    for (const l of doc.lines || []) {
+      const prod = db.products.find((x) => x.id === l.productId);
+      if (prod) prod.qty = round(prod.qty + l.qty);
+    }
+  } else if (doc.type === 'creditNote') {
+    voidJournal(db, doc, 'creditNote');
+  } else if (doc.type === 'payment') {
+    const inv = db.sales.find((x) => x.id === doc.invoiceId);
+    if (inv) {
+      inv.paidUsd = round((inv.paidUsd || 0) - (doc.amountUsd || 0));
+      if (inv.paidUsd < inv.totalUsd - 0.01) inv.status = 'posted';
+    }
+    voidJournal(db, doc, 'payment');
+  } else if (doc.type === 'supplierPayment') {
+    const bill = db.purchases.find((x) => x.id === doc.billId);
+    if (bill) {
+      bill.paidUsd = round((bill.paidUsd || 0) - (doc.amountUsd || 0));
+      if (bill.paidUsd < bill.totalUsd - 0.01) bill.status = 'posted';
+    }
+    voidJournal(db, doc, 'supplierPayment');
+  } else if (doc.type === 'bill') {
+    voidJournal(db, doc, 'bill');
+    for (const l of doc.lines || []) {
+      const prod = db.products.find((x) => x.id === l.productId);
+      if (prod) prod.qty = round(prod.qty - l.qty);
+    }
+  }
+  doc.status = 'cancelled';
   return doc;
 }
 

@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useData, fmt, fmtQty, today } from '../state';
 import { useToast } from '../toast';
 import { api } from '../api';
-import { PageHead, Icon, Modal, Field, Empty } from '../components/ui';
+import { PageHead, Icon, Modal, Field, Empty, Loader } from '../components/ui';
 import type { Product, SalesDoc, PurchaseDoc, JournalEntry } from '../types';
 
 const CATS = ['All', 'Disposable', 'Work', 'Cut-Resistant', 'Leather', 'Welding', 'Winter', 'Knit', 'Household', 'Chemical'];
@@ -17,6 +17,7 @@ export default function Products() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [creating, setCreating] = useState(false);
   const [history, setHistory] = useState<Product | null>(null);
+  const [adjust, setAdjust] = useState<Product | null>(null);
 
   const filtered = useMemo(() => products.filter((p) =>
     (cat === 'All' || p.category === cat) &&
@@ -73,6 +74,7 @@ export default function Products() {
                 <div className="flex-between">
                   <span className="product-cat">{p.category}</span>
                   <span className="flex" style={{ gap: 4 }}>
+                    <button className="icon-btn" title="Adjust stock" onClick={(e) => { e.stopPropagation(); setAdjust(p); }}><Icon name="edit" size={14} /></button>
                     <button className="icon-btn" title="Stock movement history" onClick={(e) => { e.stopPropagation(); setHistory(p); }}><Icon name="history" size={14} /></button>
                     <span className="tiny muted">{p.sku}</span>
                   </span>
@@ -104,7 +106,61 @@ export default function Products() {
         />
       )}
       {history && <HistoryModal product={history} sales={sales} purchases={purchases} journal={journal} onClose={() => setHistory(null)} />}
+      {adjust && <AdjustModal product={adjust} onClose={() => setAdjust(null)} onDone={async () => { setAdjust(null); await refresh(); }} />}
     </div>
+  );
+}
+
+function AdjustModal({ product, onClose, onDone }: { product: Product; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const [qty, setQty] = useState(0);
+  const [memo, setMemo] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
+    if (!qty) { toast('Enter a quantity change', 'error'); return; }
+    setSaving(true);
+    try {
+      await api.post(`/products/${product.id}/stock-adjust`, { qty: +qty, memo });
+      toast(`Stock ${qty > 0 ? 'increased' : 'reduced'} by ${fmtQty(Math.abs(qty))}`);
+      onDone();
+      onClose();
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const newQty = Math.max(0, product.qty + qty);
+  const newValue = newQty * product.cost;
+
+  return (
+    <Modal
+      size="sm"
+      title={`Adjust Stock · ${product.sku}`}
+      onClose={onClose}
+      foot={<>
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={submit} disabled={saving}>{saving ? <Loader size={14} light /> : 'Post Adjustment'}</button>
+      </>}
+    >
+      <div className="strong small mb-8">{product.name}</div>
+      <div className="tiny muted mb-16">Current on hand: <span className="strong">{fmtQty(product.qty)} {product.unit}</span></div>
+      <div className="form-grid">
+        <Field label="Quantity Change (use + or −)">
+          <input type="number" className="input" value={qty} onChange={(e) => setQty(+e.target.value)} placeholder="e.g. 50 or -10" />
+        </Field>
+        <Field label="Reason / Memo">
+          <input className="input" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="e.g. Cycle count, damaged stock" />
+        </Field>
+      </div>
+      <div className="grid grid-2 mt-16">
+        <div className="stat teal"><div className="stat-label">New On Hand</div><div className="stat-value" style={{ fontSize: 20 }}>{fmtQty(newQty)}</div></div>
+        <div className="stat amber"><div className="stat-label">New Value</div><div className="stat-value" style={{ fontSize: 20 }}>{fmt(newValue)}</div></div>
+      </div>
+      <div className="alert alert-info small mt-16">Posts a stock adjustment to the general ledger automatically.</div>
+    </Modal>
   );
 }
 

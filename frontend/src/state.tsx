@@ -14,6 +14,7 @@ interface Data {
   journal: JournalEntry[];
   dashboard: Dashboard | null;
   ready: boolean;
+  refreshing: boolean;
   refresh: () => Promise<void>;
   refreshDashboard: () => Promise<void>;
 }
@@ -23,17 +24,23 @@ const Ctx = createContext<Data>(null as unknown as Data);
 export function DataProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<Partial<Data>>({});
   const [ready, setReady] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadAll = useCallback(async () => {
-    const [boot, sales, purchases, journal, dashboard] = await Promise.all([
-      api.get('/bootstrap'),
-      api.get('/sales'),
-      api.get('/purchases'),
-      api.get('/journalEntries'),
-      api.get('/dashboard')
-    ]);
-    setState({ ...boot, sales, purchases, journal, dashboard });
-    setReady(true);
+    setRefreshing(true);
+    try {
+      const [boot, sales, purchases, journal, dashboard] = await Promise.all([
+        api.get('/bootstrap'),
+        api.get('/sales'),
+        api.get('/purchases'),
+        api.get('/journalEntries'),
+        api.get('/dashboard')
+      ]);
+      setState({ ...boot, sales, purchases, journal, dashboard });
+      setReady(true);
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
   const refreshDashboard = useCallback(async () => {
@@ -49,6 +56,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     loadAll().catch(console.error);
   }, [loadAll]);
 
+  useEffect(() => {
+    const code = state.settings?.baseCurrency || 'USD';
+    const cur = (state.currencies || []).find((c) => c.code === code);
+    setBaseInfo({ symbol: cur?.symbol || '$', rate: cur?.rate || 1 });
+  }, [state.settings, state.currencies]);
+
   const value: Data = {
     settings: state.settings as Settings,
     currencies: state.currencies || [],
@@ -61,6 +74,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     journal: state.journal || [],
     dashboard: state.dashboard || null,
     ready,
+    refreshing,
     refresh,
     refreshDashboard
   };
@@ -70,9 +84,27 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
 export const useData = () => useContext(Ctx);
 
-export function fmt(n: number, symbol = '$') {
+// Base / reporting currency display info. The ledger is stored in USD; when a
+// user picks a different base currency, every default fmt() call converts the
+// USD amount into the base currency and prefixes its symbol.
+let baseInfo = { symbol: '$', rate: 1 };
+export function setBaseInfo(info: { symbol: string; rate: number }) {
+  baseInfo = info;
+}
+export function getBaseInfo() {
+  return baseInfo;
+}
+
+export function fmt(n: number, symbol?: string) {
   const sign = n < 0 ? '-' : '';
-  return `${sign}${symbol}${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const abs = Math.abs(n);
+  const value = symbol === undefined ? abs * baseInfo.rate : abs;
+  const sym = symbol === undefined ? baseInfo.symbol : symbol;
+  return `${sign}${sym}${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+export function fmtMoney(n: number) {
+  return (n * baseInfo.rate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function fmtQty(n: number) {
@@ -94,6 +126,8 @@ export function statusBadge(status: string) {
     draft: { cls: 'badge-gray', label: 'Draft' },
     sent: { cls: 'badge-blue', label: 'Sent' },
     confirmed: { cls: 'badge-teal', label: 'Confirmed' },
+    converted: { cls: 'badge-purple', label: 'Converted' },
+    received: { cls: 'badge-purple', label: 'Received' },
     open: { cls: 'badge-amber', label: 'Open' },
     overdue: { cls: 'badge-red', label: 'Overdue' },
     partial: { cls: 'badge-amber', label: 'Partial' },

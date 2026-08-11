@@ -201,7 +201,7 @@ export default function DocumentModal({ type, onClose, onCreated }: { type: DocT
         <div className="text-right">
           <div className="tiny muted">Subtotal ({currency})</div>
           <div className="strong money" style={{ fontSize: 15 }}>{fmt(subtotal, curSymbol(currency, currencies))}</div>
-          {rateView && <div className="tiny muted">= {fmt(subtotal / rate)} USD</div>}
+          {rateView && <div className="tiny muted">= {fmt(subtotal / rate, '$')} USD</div>}
         </div>
         {type === 'invoice' && (
           <div className="text-right">
@@ -212,7 +212,7 @@ export default function DocumentModal({ type, onClose, onCreated }: { type: DocT
         <div className="text-right">
           <div className="tiny muted">Total</div>
           <div className="strong money" style={{ fontSize: 19 }}>{fmt(total, curSymbol(currency, currencies))}</div>
-          {rateView && <div className="tiny muted">= {fmt(totalUsd)} USD</div>}
+          {rateView && <div className="tiny muted">= {fmt(totalUsd, '$')} USD</div>}
         </div>
       </div>
     </Modal>

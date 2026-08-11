@@ -1,58 +1,94 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useData } from '../state';
+import { useToast } from '../toast';
+import { api } from '../api';
 import { Icon } from './ui';
 
 type Hit = { label: string; sub: string; to: string; icon: string };
 
-const NAV = [
+const NAV: { group: string; items: { to: string; label: string; icon: string; mod?: string }[] }[] = [
   { group: 'Overview', items: [{ to: '/', label: 'Dashboard', icon: 'dashboard' }] },
-  { group: 'Sales', items: [
-    { to: '/sales/quotations', label: 'Quotations', icon: 'doc' },
-    { to: '/sales/orders', label: 'Sales Orders', icon: 'sales' },
-    { to: '/sales/invoices', label: 'Invoices', icon: 'money' },
-    { to: '/sales/credit-notes', label: 'Credit Notes', icon: 'doc' },
-    { to: '/sales/payments', label: 'Customer Payments', icon: 'wallet' }
-  ] },
-  { group: 'Purchasing', items: [
-    { to: '/purchases/orders', label: 'Purchase Orders', icon: 'purchases' },
-    { to: '/purchases/bills', label: 'Supplier Bills', icon: 'doc' },
-    { to: '/purchases/payments', label: 'Supplier Payments', icon: 'wallet' },
-    { to: '/purchases/imports', label: 'Import Shipments', icon: 'ship' }
-  ] },
-  { group: 'Inventory', items: [
-    { to: '/products', label: 'Products & Stock', icon: 'box' },
-    { to: '/contacts/customers', label: 'Customers', icon: 'customers' },
-    { to: '/contacts/suppliers', label: 'Suppliers', icon: 'suppliers' }
-  ] },
-  { group: 'Finance', items: [
-    { to: '/banking', label: 'Banking', icon: 'bank' },
-    { to: '/accounting/chart', label: 'Chart of Accounts', icon: 'accounting' },
-    { to: '/accounting/journal', label: 'Journal & Ledger', icon: 'accounting' },
-    { to: '/reports', label: 'Reports', icon: 'reports' }
-  ] },
-  { group: 'Administration', items: [
-    { to: '/settings', label: 'Settings', icon: 'settings' }
-  ] }
+  {
+    group: 'Sales',
+    items: [
+      { to: '/sales/quotations', label: 'Quotations', icon: 'doc', mod: 'sales' },
+      { to: '/sales/orders', label: 'Sales Orders', icon: 'sales', mod: 'sales' },
+      { to: '/sales/invoices', label: 'Invoices', icon: 'money', mod: 'sales' },
+      { to: '/sales/credit-notes', label: 'Credit Notes', icon: 'doc', mod: 'sales' },
+      { to: '/sales/payments', label: 'Customer Payments', icon: 'wallet', mod: 'sales' }
+    ]
+  },
+  {
+    group: 'Purchasing',
+    items: [
+      { to: '/purchases/orders', label: 'Purchase Orders', icon: 'purchases', mod: 'purchases' },
+      { to: '/purchases/bills', label: 'Supplier Bills', icon: 'doc', mod: 'purchases' },
+      { to: '/purchases/payments', label: 'Supplier Payments', icon: 'wallet', mod: 'purchases' },
+      { to: '/purchases/imports', label: 'Import Shipments', icon: 'ship', mod: 'purchases' }
+    ]
+  },
+  {
+    group: 'Inventory',
+    items: [
+      { to: '/products', label: 'Products & Stock', icon: 'box', mod: 'inventory' },
+      { to: '/contacts/customers', label: 'Customers', icon: 'customers' },
+      { to: '/contacts/suppliers', label: 'Suppliers', icon: 'suppliers' }
+    ]
+  },
+  {
+    group: 'Finance',
+    items: [
+      { to: '/banking', label: 'Banking', icon: 'bank', mod: 'banking' },
+      { to: '/accounting/chart', label: 'Chart of Accounts', icon: 'accounting', mod: 'accounting' },
+      { to: '/accounting/journal', label: 'Journal & Ledger', icon: 'accounting', mod: 'accounting' },
+      { to: '/reports', label: 'Reports', icon: 'reports', mod: 'reports' }
+    ]
+  },
+  { group: 'Administration', items: [{ to: '/admin', label: 'Admin & Settings', icon: 'settings' }] }
 ];
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const { settings, dashboard, products, contacts, sales, purchases } = useData();
+  const { settings, dashboard, products, contacts, sales, purchases, currencies, refresh } = useData();
   const navigate = useNavigate();
+  const toast = useToast();
+  const modules = settings?.modules || {};
   const openInvoices = dashboard?.kpi?.openInvoices || 0;
   const openBills = dashboard?.kpi?.openBills || 0;
   const lowStock = dashboard?.lowStock?.length || 0;
   const [q, setQ] = useState('');
   const [focused, setFocused] = useState(false);
+  const [curOpen, setCurOpen] = useState(false);
+  const [curBusy, setCurBusy] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const curRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) setFocused(false);
+      if (curRef.current && !curRef.current.contains(e.target as Node)) setCurOpen(false);
     }
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
+
+  async function changeBase(code: string) {
+    if (code === settings?.baseCurrency) { setCurOpen(false); return; }
+    setCurBusy(true);
+    try {
+      await api.post('/settings/base-currency', { code });
+      await refresh();
+      toast(`Reporting currency changed to ${code}`);
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally {
+      setCurBusy(false);
+      setCurOpen(false);
+    }
+  }
+
+  const baseCode = settings?.baseCurrency || 'USD';
+  const baseCur = currencies.find((c) => c.code === baseCode);
 
   const hits: Hit[] = (() => {
     if (!q.trim()) return [];
@@ -71,6 +107,11 @@ export default function Layout({ children }: { children: ReactNode }) {
     navigate(h.to);
   }
 
+  const visibleNav = NAV.map((g) => ({
+    ...g,
+    items: g.items.filter((it) => !it.mod || modules[it.mod] !== false)
+  })).filter((g) => g.items.length);
+
   return (
     <div className="app">
       <aside className="sidebar">
@@ -81,7 +122,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             <div className="brand-sub">{settings?.company?.tagline || 'Gloves & Textiles'}</div>
           </div>
         </div>
-        {NAV.map((g) => (
+        {visibleNav.map((g) => (
           <div className="nav-group" key={g.group}>
             <div className="nav-group-title">{g.group}</div>
             {g.items.map((it) => {
@@ -97,7 +138,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
         ))}
         <div className="sidebar-footer">
-          Apex ERP v2.5.0 · Trading &amp; accounting suite<br />Data stored locally
+          Apex ERP v3.0.0 · Trading &amp; accounting suite<br />Data stored locally
         </div>
       </aside>
       <div className="main">
@@ -123,8 +164,24 @@ export default function Layout({ children }: { children: ReactNode }) {
             )}
           </div>
           <div className="topbar-spacer" />
-          <span className="currency-pill">Base: USD</span>
-          <div className="avatar">{settings?.company?.shortName?.slice(0, 1) || 'A'}</div>
+          <div className="cur-switch" ref={curRef}>
+            <button className="currency-pill" onClick={() => setCurOpen((o) => !o)} title="Change reporting currency">
+              <Icon name="globe" size={13} /> {baseCur?.symbol || '$'} {baseCode} <span className="caret" />
+            </button>
+            {curOpen && (
+              <div className="cur-pop">
+                <div className="cur-pop-title">Reporting currency</div>
+                {currencies.map((c) => (
+                  <button key={c.code} className={`cur-item ${c.code === baseCode ? 'active' : ''}`} onClick={() => changeBase(c.code)} disabled={curBusy}>
+                    <span className="cur-sym">{c.symbol}</span>
+                    <span className="grow"><span className="cur-code">{c.code}</span><span className="tiny muted">{c.name}</span></span>
+                    {c.code === baseCode && <Icon name="check" size={14} />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button className="avatar" title="Admin & Settings" onClick={() => navigate('/admin')}>{settings?.company?.shortName?.slice(0, 1) || 'A'}</button>
         </header>
         <main className="content">{children}</main>
       </div>

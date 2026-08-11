@@ -18,7 +18,19 @@ export function seed() {
       website: 'www.apexgloves.com', taxId: 'PK-7744311-2'
     },
     baseCurrency: 'USD', fiscalYearStart: '2026-01-01',
-    tax: { name: 'Sales Tax', rate: 0 }, lowStockThreshold: 800
+    tax: { name: 'Sales Tax', rate: 0 }, lowStockThreshold: 800,
+    preferences: {
+      invoiceDueDays: 30, billDueDays: 45, quotationValidDays: 30,
+      receiptBankAccountId: 'ba1', paymentBankAccountId: 'ba1', defaultCurrency: 'USD'
+    },
+    modules: {
+      sales: true, purchases: true, inventory: true, banking: true, accounting: true, reports: true
+    },
+    users: [
+      { id: 'u1', name: 'Apex Administrator', email: 'admin@apexgloves.com', phone: '+92 21 3456 7890', role: 'admin', active: true },
+      { id: 'u2', name: 'Accounts Team', email: 'accounts@apexgloves.com', phone: '+92 21 3456 7891', role: 'accountant', active: true },
+      { id: 'u3', name: 'Sales Desk', email: 'salesdesk@apexgloves.com', phone: '+92 21 3456 7892', role: 'viewer', active: false }
+    ]
   };
 
   db.currencies = [
@@ -102,6 +114,14 @@ export function seed() {
     { id: 'ba2', name: 'Export Collection Account', accountId: 'bank_export', currency: 'USD', bank: 'Standard Chartered', number: '**** 9032', opening: 0 },
     { id: 'ba3', name: 'Local Rupee Account', accountId: 'bank_pkr', currency: 'PKR', bank: 'Meezan Bank', number: '**** 1187', opening: 8000000 }
   ];
+
+  for (const ba of db.bankAccounts) {
+    if (ba.opening > 0 && ba.accountId !== 'bank_main') {
+      const fx = db.currencies.find((c) => c.code === ba.currency).rate;
+      const openUsd = round(ba.opening / fx);
+      store.insertJournal({ date: '2026-01-01', memo: `Opening balance - ${ba.name}`, ref: 'OPEN', docType: 'opening', docId: ba.id, lines: [{ accountId: ba.accountId, debit: openUsd }, { accountId: 'retained', credit: openUsd }] });
+    }
+  }
 
   const customersLocal = ['c1', 'c2'];
   const customersExport = ['c3', 'c4', 'c5', 'c6'];

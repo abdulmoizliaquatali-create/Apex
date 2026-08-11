@@ -6,7 +6,26 @@ export interface Settings {
   baseCurrency: string; fiscalYearStart: string;
   tax: { name: string; rate: number };
   lowStockThreshold: number;
+  preferences?: {
+    invoiceDueDays: number; billDueDays: number; quotationValidDays: number;
+    receiptBankAccountId: string; paymentBankAccountId: string; defaultCurrency: string;
+  };
+  modules?: Record<string, boolean>;
+  users?: AdminUser[];
 }
+
+export interface AdminUser {
+  id: string; name: string; email: string; phone?: string; role: 'admin' | 'accountant' | 'viewer'; active: boolean;
+}
+
+export const MODULE_DEFS: { key: string; label: string; desc: string; icon: string }[] = [
+  { key: 'sales', label: 'Sales', desc: 'Quotations, orders, invoices, credit notes & receipts', icon: 'sales' },
+  { key: 'purchases', label: 'Purchasing', desc: 'Purchase orders, supplier bills, payments & imports', icon: 'purchases' },
+  { key: 'inventory', label: 'Products & Stock', desc: 'Product catalog, stock levels and adjustments', icon: 'box' },
+  { key: 'banking', label: 'Banking', desc: 'Cash position and bank transactions', icon: 'bank' },
+  { key: 'accounting', label: 'Accounting', desc: 'Chart of accounts, journal & general ledger', icon: 'accounting' },
+  { key: 'reports', label: 'Reports', desc: 'Financial statements and analytics', icon: 'reports' }
+];
 
 export interface Currency { id?: string; code: string; name: string; symbol: string; rate: number; base?: boolean }
 

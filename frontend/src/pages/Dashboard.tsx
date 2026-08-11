@@ -16,12 +16,15 @@ export default function Dashboard() {
   const k = dashboard.kpi;
   const catData = Object.entries(dashboard.invByCategory).sort((a, b) => b[1] - a[1]).map(([label, value]) => ({ label, value, color: CAT_COLORS[label] || '#8a97ab' }));
   const totalUnits = products.reduce((s, p) => s + p.qty, 0);
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const companyName = settings?.company?.name || 'Apex team';
 
   return (
     <div>
       <div className="page-head">
         <div>
-          <div className="page-title">Good morning, Apex team</div>
+          <div className="page-title">{greeting}, {companyName}</div>
           <div className="page-sub">Here's how your glove business is performing · {settings.company.city}, {settings.company.country}</div>
         </div>
         <Link to="/sales/invoices" className="btn btn-primary"><Icon name="plus" size={15} /> New Invoice</Link>
@@ -46,7 +49,7 @@ export default function Dashboard() {
           <div className="flex-between mb-16">
             <div>
               <div className="card-title">Revenue vs Purchases</div>
-              <div className="card-sub">Monthly, USD equivalent</div>
+              <div className="card-sub">Monthly revenue vs supplier bills, in {settings.baseCurrency}</div>
             </div>
             <div className="chart-legend">
               <span><span className="legend-dot" style={{ background: '#0d9488' }} />Sales Revenue</span>

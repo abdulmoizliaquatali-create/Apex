@@ -4,6 +4,7 @@ import { useToast } from '../toast';
 import { api } from '../api';
 import { PageHead, Icon, Badge, Skeleton, Empty } from '../components/ui';
 import { DonutChart } from '../components/Charts';
+import { downloadReportPdf } from '../utils/pdf';
 
 const REPORTS = [
   { id: 'profit-loss', label: 'Profit & Loss', icon: 'trend' },
@@ -20,6 +21,8 @@ export default function Reports() {
   const [from, setFrom] = useState('2026-01-01');
   const [to, setTo] = useState(today());
   const toast = useToast();
+  const { settings, currencies } = useData();
+  const base = currencies.find((c) => c.code === (settings?.baseCurrency || 'USD'));
 
   function exportTable(id: string, rows: (string | number)[][]) {
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -29,6 +32,16 @@ export default function Reports() {
     a.download = `${id}-${today()}.csv`;
     a.click();
     toast('Report exported');
+  }
+
+  function exportPdf(id: string, title: string, rows: (string | number)[][]) {
+    downloadReportPdf({
+      title,
+      sub: `${meta?.label} · ${from} → ${to} · Generated ${new Date().toLocaleString()} · Amounts in ${base?.symbol || '$'} (${base?.code || 'USD'})`,
+      head: [rows[0].map(String)],
+      body: rows.slice(1)
+    });
+    toast('PDF exported');
   }
 
   const meta = REPORTS.find((r) => r.id === report);
@@ -59,13 +72,13 @@ export default function Reports() {
         <span className="badge badge-gray">{meta?.label} · {from} → {to}</span>
       </div>
 
-      {report === 'profit-loss' && <ProfitLoss from={from} to={to} onExport={(r) => exportTable('profit-loss', r)} />}
-      {report === 'balance-sheet' && <BalanceSheet onExport={(r) => exportTable('balance-sheet', r)} />}
-      {report === 'cash-flow' && <CashFlow from={from} to={to} onExport={(r) => exportTable('cash-flow', r)} />}
-      {report === 'sales-analysis' && <SalesAnalysis from={from} to={to} onExport={(r) => exportTable('sales-analysis', r)} />}
-      {report === 'purchase-analysis' && <PurchaseAnalysis from={from} to={to} onExport={(r) => exportTable('purchase-analysis', r)} />}
-      {report === 'inventory' && <InventoryValuation onExport={(r) => exportTable('inventory', r)} />}
-      {report === 'aging' && <Aging onExport={(r) => exportTable('aging', r)} />}
+      {report === 'profit-loss' && <ProfitLoss from={from} to={to} onExport={(r) => exportTable('profit-loss', r)} onPdf={(r) => exportPdf('profit-loss', 'Profit & Loss Statement', r)} />}
+      {report === 'balance-sheet' && <BalanceSheet onExport={(r) => exportTable('balance-sheet', r)} onPdf={(r) => exportPdf('balance-sheet', 'Balance Sheet', r)} />}
+      {report === 'cash-flow' && <CashFlow from={from} to={to} onExport={(r) => exportTable('cash-flow', r)} onPdf={(r) => exportPdf('cash-flow', 'Cash Flow Statement', r)} />}
+      {report === 'sales-analysis' && <SalesAnalysis from={from} to={to} onExport={(r) => exportTable('sales-analysis', r)} onPdf={(r) => exportPdf('sales-analysis', 'Sales Analysis', r)} />}
+      {report === 'purchase-analysis' && <PurchaseAnalysis from={from} to={to} onExport={(r) => exportTable('purchase-analysis', r)} onPdf={(r) => exportPdf('purchase-analysis', 'Purchase Analysis', r)} />}
+      {report === 'inventory' && <InventoryValuation onExport={(r) => exportTable('inventory', r)} onPdf={(r) => exportPdf('inventory', 'Inventory Valuation', r)} />}
+      {report === 'aging' && <Aging onExport={(r) => exportTable('aging', r)} onPdf={(r) => exportPdf('aging', 'Receivables & Payables Aging', r)} />}
     </div>
   );
 }
@@ -80,12 +93,15 @@ function useReport<T>(path: string, key?: string) {
   return { data, err };
 }
 
-function ReportTable({ cols, rows, footer, exportBtn }: { cols: string[]; rows: ReactNode | ReactNode[]; footer?: ReactNode; exportBtn?: () => void }) {
+function ReportTable({ cols, rows, footer, exportBtn, pdfBtn }: { cols: string[]; rows: ReactNode | ReactNode[]; footer?: ReactNode; exportBtn?: () => void; pdfBtn?: () => void }) {
   return (
     <div className="card">
       <div className="flex-between" style={{ padding: '14px 20px 0' }}>
         <div />
-        {exportBtn && <button className="btn btn-secondary btn-sm" onClick={exportBtn}><Icon name="download" size={14} /> Export CSV</button>}
+        <div className="flex" style={{ gap: 8 }}>
+          {pdfBtn && <button className="btn btn-secondary btn-sm" onClick={pdfBtn}><Icon name="printer" size={14} /> PDF</button>}
+          {exportBtn && <button className="btn btn-secondary btn-sm" onClick={exportBtn}><Icon name="download" size={14} /> Export CSV</button>}
+        </div>
       </div>
       <div className="table-wrap">
         <table>
@@ -98,13 +114,19 @@ function ReportTable({ cols, rows, footer, exportBtn }: { cols: string[]; rows: 
   );
 }
 
-function ProfitLoss({ from, to, onExport }: { from: string; to: string; onExport: (rows: (string | number)[][]) => void }) {
+function ProfitLoss({ from, to, onExport, onPdf }: { from: string; to: string; onExport: (rows: (string | number)[][]) => void; onPdf: (rows: (string | number)[][]) => void }) {
   const { data, err } = useReport<{ rows: any[]; income: number; expense: number; netProfit: number }>(`/api/reports/profit-loss?from=${from}&to=${to}`, from + to);
   if (err) return <Empty icon="reports" title="Failed to load" sub={err} />;
   if (!data) return <Skeleton height={300} />;
 
   const rows: (string | number)[][] = [['Account', 'Code', 'Amount']];
+  const pdfData = [...rows, ...data.rows.map((r) => [r.name, r.code, Number(r.amount.toFixed(2))])];
   const exportRows = () => onExport([...rows, ...data.rows.map((r) => [r.name, r.code, r.amount.toFixed(2)])]);
+  const pdfRows = () => onPdf([...pdfData,
+    ['Total Income', '', Number(data.income.toFixed(2))],
+    ['Total Expenses', '', Number(data.expense.toFixed(2))],
+    ['Net Profit', '', Number(data.netProfit.toFixed(2))]
+  ]);
 
   const groups: Record<string, any[]> = {};
   for (const r of data.rows) (groups[r.category] = groups[r.category] || []).push(r);
@@ -114,6 +136,7 @@ function ProfitLoss({ from, to, onExport }: { from: string; to: string; onExport
       <ReportTable
         cols={['Account', 'Category', 'Amount']}
         exportBtn={exportRows}
+        pdfBtn={pdfRows}
         rows={
           <>
             {Object.entries(groups).map(([cat, rs]) => (
@@ -157,7 +180,7 @@ function ProfitLoss({ from, to, onExport }: { from: string; to: string; onExport
   );
 }
 
-function BalanceSheet({ onExport }: { onExport: (rows: (string | number)[][]) => void }) {
+function BalanceSheet({ onExport, onPdf }: { onExport: (rows: (string | number)[][]) => void; onPdf: (rows: (string | number)[][]) => void }) {
   const { data, err } = useReport<{ byType: Record<string, any[]>; assets: number; liabilities: number; equity: number; netProfit: number; balanced: boolean }>('/api/reports/balance-sheet');
   if (err) return <Empty icon="reports" title="Failed to load" sub={err} />;
   if (!data) return <Skeleton height={300} />;
@@ -181,6 +204,17 @@ function BalanceSheet({ onExport }: { onExport: (rows: (string | number)[][]) =>
     onExport(rows);
   };
 
+  const pdfRows = () => {
+    const rows: (string | number)[][] = [['', 'Amount']];
+    for (const t of ['asset', 'liability', 'equity']) {
+      rows.push([`TOTAL ${t.toUpperCase()}`, Number((data as any)[t === 'asset' ? 'assets' : t === 'liability' ? 'liabilities' : 'equity'].toFixed(2))]);
+      for (const r of data.byType[t]) rows.push([r.name, Number(r.amount.toFixed(2))]);
+    }
+    rows.push(['Net Profit', Number(data.netProfit.toFixed(2))]);
+    rows.push(['TOTAL LIABILITIES + EQUITY', Number((data.liabilities + data.equity + data.netProfit).toFixed(2))]);
+    onPdf(rows);
+  };
+
   return (
     <div>
       <div className="grid grid-4 mb-16">
@@ -192,6 +226,7 @@ function BalanceSheet({ onExport }: { onExport: (rows: (string | number)[][]) =>
       <ReportTable
         cols={['Account', 'Amount']}
         exportBtn={exportRows}
+        pdfBtn={pdfRows}
         rows={<>
           {section('asset', 'Assets', data.assets)}
           {section('liability', 'Liabilities', data.liabilities)}
@@ -206,7 +241,7 @@ function BalanceSheet({ onExport }: { onExport: (rows: (string | number)[][]) =>
   );
 }
 
-function CashFlow({ from, to, onExport }: { from: string; to: string; onExport: (rows: (string | number)[][]) => void }) {
+function CashFlow({ from, to, onExport, onPdf }: { from: string; to: string; onExport: (rows: (string | number)[][]) => void; onPdf: (rows: (string | number)[][]) => void }) {
   const { data, err } = useReport<{ inflow: number; outflow: number; net: number; categories: Record<string, number> }>(`/api/reports/cash-flow?from=${from}&to=${to}`, from + to);
   if (err) return <Empty icon="reports" title="Failed to load" sub={err} />;
   if (!data) return <Skeleton height={300} />;
@@ -215,6 +250,12 @@ function CashFlow({ from, to, onExport }: { from: string; to: string; onExport: 
     ['Metric', 'Amount'],
     ['Cash Inflow', data.inflow], ['Cash Outflow', data.outflow], ['Net Cash Flow', data.net],
     ['Operating', data.categories.operating], ['Financing', data.categories.financing]
+  ]);
+
+  const pdfRows = () => onPdf([
+    ['Metric', 'Amount'],
+    ['Cash Inflow', Number(data.inflow.toFixed(2))], ['Cash Outflow', Number(data.outflow.toFixed(2))], ['Net Cash Flow', Number(data.net.toFixed(2))],
+    ['Operating Activities', Number(data.categories.operating.toFixed(2))], ['Financing Activities', Number(data.categories.financing.toFixed(2))]
   ]);
 
   return (
@@ -227,6 +268,7 @@ function CashFlow({ from, to, onExport }: { from: string; to: string; onExport: 
       <ReportTable
         cols={['Category', 'Amount']}
         exportBtn={exportRows}
+        pdfBtn={pdfRows}
         rows={<>
           <tr><td>Operating Activities</td><td className="num money">{fmt(data.categories.operating)}</td></tr>
           <tr><td>Financing Activities</td><td className="num money">{fmt(data.categories.financing)}</td></tr>
@@ -237,7 +279,7 @@ function CashFlow({ from, to, onExport }: { from: string; to: string; onExport: 
   );
 }
 
-function SalesAnalysis({ from, to, onExport }: { from: string; to: string; onExport: (rows: (string | number)[][]) => void }) {
+function SalesAnalysis({ from, to, onExport, onPdf }: { from: string; to: string; onExport: (rows: (string | number)[][]) => void; onPdf: (rows: (string | number)[][]) => void }) {
   const { sales } = useData();
   const [groupBy, setGroupBy] = useState('customer');
   const { data, err } = useReport<{ rows: { name: string; count: number; revenue: number; units: number }[]; total: number }>(`/api/reports/sales-analysis?from=${from}&to=${to}&groupBy=${groupBy}`, from + to + groupBy);
@@ -247,6 +289,12 @@ function SalesAnalysis({ from, to, onExport }: { from: string; to: string; onExp
   const exportRows = () => onExport([
     [groupBy === 'customer' ? 'Customer' : 'Product', 'Invoices', 'Units', 'Revenue'],
     ...data.rows.map((r) => [r.name, r.count, r.units, r.revenue.toFixed(2)])
+  ]);
+
+  const pdfRows = () => onPdf([
+    [groupBy === 'customer' ? 'Customer' : 'Product', 'Invoices', 'Units', 'Revenue'],
+    ...data.rows.map((r) => [r.name, r.count, r.units, Number(r.revenue.toFixed(2))]),
+    ['TOTAL REVENUE', '', '', Number(data.total.toFixed(2))]
   ]);
 
   return (
@@ -261,6 +309,7 @@ function SalesAnalysis({ from, to, onExport }: { from: string; to: string; onExp
       <ReportTable
         cols={[groupBy === 'customer' ? 'Customer' : 'Product', 'Invoices', 'Units', 'Revenue']}
         exportBtn={exportRows}
+        pdfBtn={pdfRows}
         rows={data.rows.map((r, i) => (
           <tr key={r.name}>
             <td><span className="badge badge-gray" style={{ marginRight: 8 }}>#{i + 1}</span>{r.name}</td>
@@ -275,7 +324,7 @@ function SalesAnalysis({ from, to, onExport }: { from: string; to: string; onExp
   );
 }
 
-function PurchaseAnalysis({ from, to, onExport }: { from: string; to: string; onExport: (rows: (string | number)[][]) => void }) {
+function PurchaseAnalysis({ from, to, onExport, onPdf }: { from: string; to: string; onExport: (rows: (string | number)[][]) => void; onPdf: (rows: (string | number)[][]) => void }) {
   const { data, err } = useReport<{ rows: { name: string; count: number; total: number }[]; total: number }>(`/api/reports/purchase-analysis?from=${from}&to=${to}`, from + to);
   if (err) return <Empty icon="reports" title="Failed to load" sub={err} />;
   if (!data) return <Skeleton height={300} />;
@@ -285,10 +334,17 @@ function PurchaseAnalysis({ from, to, onExport }: { from: string; to: string; on
     ...data.rows.map((r) => [r.name, r.count, r.total.toFixed(2)])
   ]);
 
+  const pdfRows = () => onPdf([
+    ['Supplier', 'Bills', 'Total'],
+    ...data.rows.map((r) => [r.name, r.count, Number(r.total.toFixed(2))]),
+    ['TOTAL PURCHASES', '', Number(data.total.toFixed(2))]
+  ]);
+
   return (
     <ReportTable
       cols={['Supplier', 'Bills', 'Total']}
       exportBtn={exportRows}
+      pdfBtn={pdfRows}
       rows={data.rows.map((r, i) => (
         <tr key={r.name}>
           <td><span className="badge badge-gray" style={{ marginRight: 8 }}>#{i + 1}</span>{r.name}</td>
@@ -301,7 +357,7 @@ function PurchaseAnalysis({ from, to, onExport }: { from: string; to: string; on
   );
 }
 
-function InventoryValuation({ onExport }: { onExport: (rows: (string | number)[][]) => void }) {
+function InventoryValuation({ onExport, onPdf }: { onExport: (rows: (string | number)[][]) => void; onPdf: (rows: (string | number)[][]) => void }) {
   const { data, err } = useReport<{ rows: any[]; total: number; totalRetail: number }>('/api/reports/inventory-valuation');
   if (err) return <Empty icon="reports" title="Failed to load" sub={err} />;
   if (!data) return <Skeleton height={300} />;
@@ -311,10 +367,17 @@ function InventoryValuation({ onExport }: { onExport: (rows: (string | number)[]
     ...data.rows.map((r) => [r.sku, r.name, r.category, r.qty, r.cost, r.value.toFixed(2), r.retailValue.toFixed(2)])
   ]);
 
+  const pdfRows = () => onPdf([
+    ['SKU', 'Product', 'Category', 'Qty', 'Unit Cost', 'Value', 'Retail Value'],
+    ...data.rows.map((r) => [r.sku, r.name, r.category, r.qty, Number(r.cost.toFixed(2)), Number(r.value.toFixed(2)), Number(r.retailValue.toFixed(2))]),
+    ['', 'TOTAL INVENTORY VALUE', '', '', '', Number(data.total.toFixed(2)), Number(data.totalRetail.toFixed(2))]
+  ]);
+
   return (
     <ReportTable
       cols={['SKU', 'Product', 'Category', 'Qty', 'Unit Cost', 'Value (Cost)', 'Value (Retail)']}
       exportBtn={exportRows}
+      pdfBtn={pdfRows}
       rows={data.rows.map((r) => (
         <tr key={r.id}>
           <td className="muted">{r.sku}</td>
@@ -333,7 +396,7 @@ function InventoryValuation({ onExport }: { onExport: (rows: (string | number)[]
   );
 }
 
-function Aging({ onExport }: { onExport: (rows: (string | number)[][]) => void }) {
+function Aging({ onExport, onPdf }: { onExport: (rows: (string | number)[][]) => void; onPdf: (rows: (string | number)[][]) => void }) {
   const { data, err } = useReport<{ ar: any[]; ap: any[]; arBuckets: Record<string, number>; apBuckets: Record<string, number>; arTotal: number; apTotal: number }>('/api/reports/aging');
   if (err) return <Empty icon="reports" title="Failed to load" sub={err} />;
   if (!data) return <Skeleton height={300} />;
@@ -345,6 +408,15 @@ function Aging({ onExport }: { onExport: (rows: (string | number)[][]) => void }
     ['', 'Current', '1-30', '31-60', '61-90', '90+', 'Total'],
     ['Accounts Receivable', ...bucketOrder.map((b) => data.arBuckets[b] || 0), data.arTotal],
     ['Accounts Payable', ...bucketOrder.map((b) => data.apBuckets[b] || 0), data.apTotal]
+  ]);
+
+  const pdfRows = () => onPdf([
+    ['', 'Current', '1-30', '31-60', '61-90', '90+', 'Total'],
+    ['Accounts Receivable', ...bucketOrder.map((b) => Number((data.arBuckets[b] || 0).toFixed(2))), Number(data.arTotal.toFixed(2))],
+    ['Accounts Payable', ...bucketOrder.map((b) => Number((data.apBuckets[b] || 0).toFixed(2))), Number(data.apTotal.toFixed(2))],
+    ['', '', '', '', '', '', ''],
+    ['Open items', 'Document', 'Due Date', 'Outstanding', '', '', 'Bucket'],
+    ...[...data.ar, ...data.ap].map((r) => [r.kind === 'ar' ? 'Receivable' : 'Payable', r.docNumber, r.dueDate, Number(r.outstanding.toFixed(2)), '', '', r.bucket])
   ]);
 
   const section = (kind: 'ar' | 'ap', title: string, total: number) => (
@@ -365,6 +437,7 @@ function Aging({ onExport }: { onExport: (rows: (string | number)[][]) => void }
       <ReportTable
         cols={['Aging Summary', 'Amount']}
         exportBtn={exportRows}
+        pdfBtn={pdfRows}
         rows={<>
           {section('ar', 'Accounts Receivable', data.arTotal)}
           {section('ap', 'Accounts Payable', data.apTotal)}

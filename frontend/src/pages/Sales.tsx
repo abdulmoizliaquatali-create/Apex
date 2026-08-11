@@ -102,7 +102,7 @@ export default function Sales() {
                     <td>{d.customerName}</td>
                     <td className="muted">{d.date}</td>
                     <td className="muted">{isPayment ? '—' : (tab.type === 'quotation' ? (d as any).validUntil || '-' : d.dueDate || '-')}</td>
-                    <td className="num money">{isPayment ? fmt(amountUsd) : fmt(d.total, sym)}{!isPayment && d.currency !== 'USD' && <span className="tiny muted"> · {fmt(d.totalUsd)}$</span>}</td>
+                    <td className="num money">{isPayment ? fmt(amountUsd) : fmt(d.total, sym)}{!isPayment && d.currency !== 'USD' && <span className="tiny muted"> · {fmt(d.totalUsd, '$')} USD</span>}</td>
                     <td className="num money muted">{tab.type === 'invoice' ? fmt(d.paidUsd || 0) : (isPayment ? fmt(amountUsd) : '—')}</td>
                     <td className="num money strong">{tab.type === 'invoice' ? fmt(outstanding) : '—'}</td>
                     <td><Badge cls={badge.cls}><span className="badge-dot" />{badge.label}</Badge></td>

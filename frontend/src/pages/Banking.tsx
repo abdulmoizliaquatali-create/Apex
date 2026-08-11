@@ -85,7 +85,7 @@ export default function Banking() {
               <div className="avatar" style={{ background: 'var(--primary-soft)', color: 'var(--primary-dark)' }}><Icon name="bank" size={18} /></div>
             </div>
             <div className="strong" style={{ fontSize: 24, marginTop: 14 }}>{fmt(b.balance)}</div>
-            <div className="tiny muted">USD balance · {b.currency}</div>
+            <div className="tiny muted">Available · {b.currency}</div>
           </div>
         ))}
       </div>

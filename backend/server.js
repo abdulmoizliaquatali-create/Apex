@@ -2,11 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import { store, round, uid } from './store.js';
 import { seed } from './seed.js';
-import { convert, lineTotals, postInvoice, postCustomerPayment, postBill, postSupplierPayment, postBankTransaction, createSalesDoc, createPurchaseDoc } from './ledger.js';
+import { convert, lineTotals, postInvoice, postCustomerPayment, postBill, postSupplierPayment, postBankTransaction, createSalesDoc, createPurchaseDoc, convertSalesDoc, receivePurchaseOrder, adjustStock, cancelDoc } from './ledger.js';
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 let db = store.db;
 
@@ -18,6 +18,10 @@ if (db.accounts.length === 0) {
 // ---------------- Bootstrap ----------------
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
+app.get('/api/export', (req, res) => {
+  res.json({ exportedAt: new Date().toISOString(), note: 'Apex Gloves - full data backup', db: db });
+});
+
 app.get('/api/bootstrap', (req, res) => {
   res.json({
     settings: db.settings, currencies: db.currencies, accounts: db.accounts,
@@ -27,6 +31,86 @@ app.get('/api/bootstrap', (req, res) => {
 
 // ---------------- Generic CRUD (declared at the end so specific routes win) ----------------
 const COLLECTIONS = ['contacts', 'products', 'accounts', 'sales', 'purchases', 'bankAccounts', 'bankTransactions', 'journalEntries', 'currencies'];
+
+// ---------------- Workflow automation ----------------
+app.post('/api/sales/:id/convert', (req, res) => {
+  const { to } = req.body;
+  try {
+    const result = convertSalesDoc(db, req.params.id, to, req.body);
+    store.save();
+    res.status(201).json({ ...result.doc, convertedFrom: result.converted.number });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/api/purchases/:id/receive', (req, res) => {
+  try {
+    const result = receivePurchaseOrder(db, req.params.id, req.body);
+    store.save();
+    res.status(201).json({ ...result.bill, receivedFrom: result.received.number });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/api/sales/:id/status', (req, res) => {
+  const doc = db.sales.find((x) => x.id === req.params.id);
+  if (!doc) return res.status(404).json({ error: 'document not found' });
+  const { status } = req.body;
+  try {
+    if (status === 'cancelled') cancelDoc(db, doc);
+    else doc.status = status;
+    store.save();
+    res.json(doc);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/api/purchases/:id/status', (req, res) => {
+  const doc = db.purchases.find((x) => x.id === req.params.id);
+  if (!doc) return res.status(404).json({ error: 'document not found' });
+  const { status } = req.body;
+  try {
+    if (status === 'cancelled') cancelDoc(db, doc);
+    else doc.status = status;
+    store.save();
+    res.json(doc);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/api/products/:id/stock-adjust', (req, res) => {
+  const product = db.products.find((x) => x.id === req.params.id);
+  if (!product) return res.status(404).json({ error: 'product not found' });
+  const delta = Number(req.body.qty) || 0;
+  try {
+    const result = adjustStock(db, product, delta, req.body.memo);
+    store.save();
+    res.json(result);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/api/restore', (req, res) => {
+  const data = req.body && req.body.db ? req.body.db : req.body;
+  if (!data || typeof data !== 'object' || !Array.isArray(data.sales)) {
+    return res.status(400).json({ error: 'invalid backup payload' });
+  }
+  const cleaned = store.blank();
+  for (const key of ['settings', 'currencies', 'accounts', 'contacts', 'products', 'sales', 'purchases', 'bankAccounts', 'bankTransactions', 'journalEntries', 'sequences']) {
+    if (Array.isArray(data[key]) || (key === 'settings' && typeof data[key] === 'object') || key === 'sequences') {
+      cleaned[key] = data[key] || (key === 'sequences' ? {} : key === 'settings' ? {} : []);
+    }
+  }
+  store.db = cleaned;
+  store.save();
+  db = store.db;
+  res.json({ ok: true });
+});
 
 // ---------------- Sales / Purchases document creation ----------------
 app.post('/api/sales', (req, res) => {
@@ -93,6 +177,19 @@ app.post('/api/settings', (req, res) => {
   db.settings = { ...db.settings, ...req.body };
   store.save();
   res.json(db.settings);
+});
+
+// Change the reporting/base currency. Ledger stays in USD internally; this
+// only changes the display base and the base flag on the currency table.
+app.post('/api/settings/base-currency', (req, res) => {
+  const { code } = req.body;
+  const cur = db.currencies.find((c) => c.code === code);
+  if (!cur) return res.status(400).json({ error: `unknown currency ${code}` });
+  db.settings.baseCurrency = code;
+  for (const c of db.currencies) c.base = c.code === code;
+  db.settings.preferences = { ...(db.settings.preferences || {}), defaultCurrency: code };
+  store.save();
+  res.json({ ok: true, baseCurrency: code, currencies: db.currencies });
 });
 
 app.post('/api/accounts', (req, res) => {
@@ -233,7 +330,7 @@ function profitToDate(asOf) {
 
 app.get('/api/reports/cash-flow', (req, res) => {
   const { from = '2026-01-01', to = today() } = req.query;
-  const bankSet = new Set(['bank_main', 'bank_export', 'bank_pkr']);
+  const bankSet = new Set(db.bankAccounts.map((b) => b.accountId));
   const categories = { operating: 0, investing: 0, financing: 0 };
   let inflow = 0;
   let outflow = 0;
@@ -328,12 +425,15 @@ app.get('/api/dashboard', (req, res) => {
   const bal = accountBalances();
   const arOpen = invs.reduce((s, x) => s + (x.totalUsd - x.paidUsd), 0);
   const apOpen = bills.reduce((s, x) => s + (x.totalUsd - x.paidUsd), 0);
-  const cash = round(bal.bank_main);
+  const bankIds = db.bankAccounts.map((b) => b.accountId);
+  const cash = round(bankIds.reduce((s, id) => s + (bal[id] || 0), 0));
   const inventory = round(bal.inventory);
   const invValue = db.products.reduce((s, p) => s + p.qty * p.cost, 0);
 
-  // revenue by month for chart
-  const labels = ['2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08'];
+  // revenue by month for chart (last 7 months with data, dynamic)
+  const monthSet = new Set([...invs, ...bills].map((x) => x.date.slice(0, 7)));
+  const months = [...monthSet].sort();
+  const labels = months.length ? months.slice(-7) : [today().slice(0, 7)];
   const revenueSeries = labels.map((m) => round(invs.filter((x) => x.date.slice(0, 7) === m).reduce((s, x) => s + x.totalUsd, 0)));
   const expenseSeries = labels.map((m) => round(bills.filter((x) => x.date.slice(0, 7) === m).reduce((s, x) => s + x.totalUsd, 0)));
 
@@ -402,11 +502,34 @@ app.post('/api/:col', (req, res) => {
   const { col } = req.params;
   if (!COLLECTIONS.includes(col) || col === 'sales' || col === 'purchases') return res.status(404).json({ error: 'unknown collection' });
   const record = { id: uid(), ...req.body };
+  if (col === 'bankAccounts') {
+    const glId = uid('acct_');
+    const gl = { id: glId, code: String(req.body.code || nextAccountCode('10')), name: req.body.name || 'Bank Account', type: 'asset', category: 'Bank', ...(req.body.currency ? { currency: req.body.currency } : {}) };
+    db.accounts.push(gl);
+    record.accountId = gl.id;
+    const opening = Math.abs(Number(req.body.opening) || 0);
+    if (opening > 0) {
+      store.insertJournal({
+        date: today(), memo: `Opening balance - ${gl.name}`, ref: gl.code, docType: 'opening', docId: gl.id,
+        lines: [{ accountId: gl.id, debit: opening }, { accountId: 'retained', credit: opening }]
+      });
+    }
+  }
   store.insert(col, record);
   if (col === 'products') postInventoryAdjustment(record, 0, 0, true);
   store.save();
   res.status(201).json(record);
 });
+
+function nextAccountCode(prefix) {
+  const nums = db.accounts
+    .map((a) => a.code)
+    .filter((c) => String(c).startsWith(prefix))
+    .map((c) => parseInt(String(c), 10))
+    .filter((n) => !isNaN(n));
+  const next = (nums.length ? Math.max(...nums) + 1 : parseInt(prefix + '00', 10));
+  return String(next);
+}
 
 app.get('/api/:col', (req, res) => {
   if (!COLLECTIONS.includes(req.params.col)) return res.status(404).json({ error: 'unknown collection' });

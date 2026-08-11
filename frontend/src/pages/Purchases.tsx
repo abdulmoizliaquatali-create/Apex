@@ -131,7 +131,7 @@ export default function Purchases() {
                         <td className="num money">{fmt(d.customsUsd || 0)}</td>
                       </>
                     )}
-                    <td className="num money">{isPayment ? fmt(amountUsd) : fmt(d.total, sym)}{!isPayment && d.currency !== 'USD' && <span className="tiny muted"> · {fmt(d.totalUsd)}$</span>}</td>
+                    <td className="num money">{isPayment ? fmt(amountUsd) : fmt(d.total, sym)}{!isPayment && d.currency !== 'USD' && <span className="tiny muted"> · {fmt(d.totalUsd, '$')} USD</span>}</td>
                     {tab.type === 'bills' && <td className="num money muted">{fmt(d.paidUsd || 0)}</td>}
                     <td><Badge cls={badge.cls}><span className="badge-dot" />{badge.label}</Badge></td>
                     <td>
