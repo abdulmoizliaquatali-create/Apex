@@ -1,0 +1,14 @@
+# Netlify config — the frontend deploys as a static site from the `frontend` dir.
+# The SPA calls the Render backend at the absolute URL set in
+# frontend/.env.production (VITE_API_URL), so no /api proxying is needed here.
+
+[build]
+  base = "frontend"
+  command = "npm ci && npm run build"
+  publish = "dist"
+
+# SPA fallback: let React Router handle client-side routes.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

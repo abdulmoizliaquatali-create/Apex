@@ -96,21 +96,48 @@ cd frontend && npm run dev
 curl -X POST http://localhost:3001/api/reset -H 'Content-Type: application/json' -d '{}'
 ```
 
-## Deploy for free (Render)
+## Deploy for free (Netlify + Render)
 
-The repo includes a `render.yaml` blueprint that deploys **both** the frontend and
-backend as a single free web service — the Express API also serves the built SPA,
-so everything lives at one URL with no CORS.
+The app splits into two free services. The **frontend** is a static site on
+Netlify; the **backend** runs on Render. They talk over the public internet with
+CORS (already allow-listed in `backend/server.js`).
+
+### 1. Backend → Render (Web Service)
 
 1. Push this repository to GitHub.
-2. In the Render dashboard: **New → Blueprint** → connect the repo.
-3. Render reads `render.yaml`, builds the frontend (`npm run build`), and starts
-   the backend, which serves the SPA at `/` and the API under `/api`.
+2. Render dashboard → **New → Web Service** → connect the repo.
+3. Set **Root Directory** to `backend`.
+4. Build Command: `npm install` · Start Command: `npm start` (defaults).
+5. Deploy. You'll get a URL like `https://<service>.onrender.com`.
 
-> **Free-tier caveats:** the instance sleeps after ~15 minutes of inactivity and
-> wakes on the next request (first load takes ~30–50 s). The filesystem is
-> ephemeral — data is re-seeded on every redeploy. For persistent data, switch
-> the store to a hosted database (e.g. Supabase free tier).
+The API lives under `/api` on that URL, e.g. `https://<service>.onrender.com/api/health`.
+
+### 2. Frontend → Netlify (static site)
+
+1. Netlify dashboard → **Add new site → Import an existing project** → connect
+   the same GitHub repo.
+2. Netlify reads the root `netlify.toml`, which sets:
+   - Base directory: `frontend`
+   - Build command: `npm ci && npm run build`
+   - Publish directory: `dist`
+3. The frontend routes API calls to your Render backend via
+   `frontend/.env.production`:
+
+   ```env
+   VITE_API_URL=https://<your-render-service>.onrender.com/api
+   ```
+
+   Update that value to match your Render service name.
+
+> **Free-tier caveats:** the Render instance sleeps after ~15 minutes of
+> inactivity and wakes on the next request (first load ~30–50 s). The backend
+> filesystem is ephemeral — demo data re-seeds on every redeploy. For persistent
+> data, switch the store to a hosted database (e.g. Supabase free tier).
+
+### Local development
+
+Dev mode keeps using the Vite proxy: `VITE_API_URL` is unset, so `api.ts`
+defaults to same-origin `/api`, and `vite.config.ts` proxies it to `:3001`.
 
 ## Scripts
 
