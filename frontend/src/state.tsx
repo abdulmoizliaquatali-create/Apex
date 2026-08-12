@@ -1,6 +1,6 @@
 import { createContext, useContext, useCallback, useEffect, useState, ReactNode } from 'react';
 import { api } from './api';
-import type { Settings, Currency, Account, Contact, Product, SalesDoc, PurchaseDoc, BankAccount, JournalEntry, Dashboard } from './types';
+import type { Settings, Currency, Account, Contact, Product, SalesDoc, PurchaseDoc, BankAccount, JournalEntry, Dashboard, FxRates } from './types';
 
 interface Data {
   settings: Settings;
@@ -13,6 +13,8 @@ interface Data {
   purchases: PurchaseDoc[];
   journal: JournalEntry[];
   dashboard: Dashboard | null;
+  fx: FxRates | null;
+  refreshFx: () => Promise<void>;
   ready: boolean;
   refreshing: boolean;
   refresh: () => Promise<void>;
@@ -48,6 +50,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, dashboard }));
   }, []);
 
+  const refreshFx = useCallback(async () => {
+    try {
+      const fx = await api.get('/currencies/rates');
+      setState((s) => ({ ...s, fx }));
+    } catch {}
+  }, []);
+
+  // Load FX freshness metadata without blocking the boot (best-effort).
+  useEffect(() => {
+    refreshFx();
+  }, [refreshFx]);
+
   const refresh = useCallback(async () => {
     await loadAll();
   }, [loadAll]);
@@ -73,6 +87,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     purchases: state.purchases || [],
     journal: state.journal || [],
     dashboard: state.dashboard || null,
+    fx: state.fx || null,
+    refreshFx,
     ready,
     refreshing,
     refresh,

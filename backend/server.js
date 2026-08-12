@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { store, round, uid } from './store.js';
 import { seed } from './seed.js';
+import { refreshRates, getRates, startFxScheduler } from './fx.js';
 import { convert, lineTotals, postInvoice, postCustomerPayment, postBill, postSupplierPayment, postBankTransaction, createSalesDoc, createPurchaseDoc, convertSalesDoc, receivePurchaseOrder, adjustStock, cancelDoc } from './ledger.js';
 
 const app = express();
@@ -416,6 +417,20 @@ app.get('/api/reports/currency', (req, res) => {
   res.json({ currencies: db.currencies });
 });
 
+// ---------------- Auto FX rates ----------------
+app.get('/api/currencies/rates', (req, res) => {
+  res.json(getRates());
+});
+
+app.post('/api/currencies/rates/refresh', async (req, res) => {
+  try {
+    const result = await refreshRates();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/dashboard', (req, res) => {
   const month = today().slice(0, 7);
   const invs = db.sales.filter((x) => x.type === 'invoice');
@@ -582,3 +597,6 @@ if (fs.existsSync(distDir)) {
 app.listen(PORT, () => {
   console.log(`Apex backend listening on http://localhost:${PORT}`);
 });
+
+// ---------------- Auto FX scheduler ----------------
+startFxScheduler(process.env.FX_REFRESH_HOURS);

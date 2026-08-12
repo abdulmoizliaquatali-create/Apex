@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useData } from '../state';
+import { useTheme } from '../theme';
 import { useToast } from '../toast';
 import { api } from '../api';
 import { Icon } from './ui';
@@ -50,6 +51,7 @@ const NAV: { group: string; items: { to: string; label: string; icon: string; mo
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { settings, dashboard, products, contacts, sales, purchases, currencies, refresh } = useData();
+  const { theme, toggle } = useTheme();
   const navigate = useNavigate();
   const toast = useToast();
   const modules = settings?.modules || {};
@@ -164,6 +166,9 @@ export default function Layout({ children }: { children: ReactNode }) {
             )}
           </div>
           <div className="topbar-spacer" />
+          <button className="theme-btn" onClick={toggle} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} aria-label="Toggle theme">
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={16} />
+          </button>
           <div className="cur-switch" ref={curRef}>
             <button className="currency-pill" onClick={() => setCurOpen((o) => !o)} title="Change reporting currency">
               <Icon name="globe" size={13} /> {baseCur?.symbol || '$'} {baseCode} <span className="caret" />

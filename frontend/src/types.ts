@@ -29,6 +29,13 @@ export const MODULE_DEFS: { key: string; label: string; desc: string; icon: stri
 
 export interface Currency { id?: string; code: string; name: string; symbol: string; rate: number; base?: boolean }
 
+export interface FxRates {
+  source: string | null;
+  updatedAt: string | null;
+  fallback: boolean;
+  base: string;
+}
+
 export interface Account { id: string; code: string; name: string; type: 'asset' | 'liability' | 'equity' | 'income' | 'expense'; category: string; currency?: string; contra?: boolean }
 
 export interface Contact { id: string; kind: 'customer' | 'supplier'; name: string; person: string; email: string; phone: string; address: string; city: string; country: string; currency: string; creditLimit?: number; type?: string; active: boolean }

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useData, today } from '../state';
+import { useTheme } from '../theme';
 import { useToast } from '../toast';
 import { api } from '../api';
 import { PageHead, Icon, Field, Modal, Loader, Empty } from '../components/ui';
@@ -127,8 +128,9 @@ function ProfileTab() {
 // ---------------- Preferences ----------------
 function PreferencesTab() {
   const { settings, bankAccounts, currencies, refresh } = useData();
+  const { theme, setTheme } = useTheme();
   const toast = useToast();
-  const [prefs, setPrefs] = useState<Record<string, unknown>>(settings?.preferences || { invoiceDueDays: 30, billDueDays: 45, quotationValidDays: 30, receiptBankAccountId: 'ba1', paymentBankAccountId: 'ba1', defaultCurrency: 'USD' });
+  const [prefs, setPrefs] = useState<Record<string, unknown>>(settings?.preferences || { invoiceDueDays: 30, billDueDays: 45, quotationValidDays: 30, receiptBankAccountId: 'ba3', paymentBankAccountId: 'ba3', defaultCurrency: 'PKR' });
   const [saving, setSaving] = useState(false);
 
   const set = (k: string, v: unknown) => setPrefs((p) => ({ ...p, [k]: v }));
@@ -171,15 +173,31 @@ function PreferencesTab() {
         </div>
         <div className="flex mt-24"><SaveButton onSave={save} saving={saving} /></div>
       </TabCard>
-      <div className="card card-pad">
-        <div className="card-title mb-16">How automation works</div>
-        <ul className="admin-list">
-          <li>Due dates default from your terms on every invoice and bill.</li>
-          <li>Quotations convert into orders and invoices with one click.</li>
-          <li>Purchase orders become bills when you receive the goods.</li>
-          <li>Receipts and payments post to the bank account you choose here.</li>
-          <li>Stock adjusts automatically when invoices and bills post.</li>
-        </ul>
+      <div className="flex" style={{ flexDirection: 'column', gap: 16, alignItems: 'stretch' }}>
+        <div className="card card-pad">
+          <div className="card-title mb-16">Appearance</div>
+          <div className="flex">
+            <div className="seg">
+              <button className={theme === 'light' ? 'active' : ''} onClick={() => setTheme('light')}>
+                <Icon name="sun" size={14} /> Light
+              </button>
+              <button className={theme === 'dark' ? 'active' : ''} onClick={() => setTheme('dark')}>
+                <Icon name="moon" size={14} /> Dark
+              </button>
+            </div>
+          </div>
+          <div className="tiny muted mt-16">Your choice is saved on this device. The app defaults to your system theme on first visit.</div>
+        </div>
+        <div className="card card-pad">
+          <div className="card-title mb-16">How automation works</div>
+          <ul className="admin-list">
+            <li>Due dates default from your terms on every invoice and bill.</li>
+            <li>Quotations convert into orders and invoices with one click.</li>
+            <li>Purchase orders become bills when you receive the goods.</li>
+            <li>Receipts and payments post to the bank account you choose here.</li>
+            <li>Stock adjusts automatically when invoices and bills post.</li>
+          </ul>
+        </div>
       </div>
     </div>
   );
@@ -187,11 +205,12 @@ function PreferencesTab() {
 
 // ---------------- Currencies ----------------
 function CurrenciesTab() {
-  const { currencies, settings, refresh } = useData();
+  const { currencies, settings, refresh, fx, refreshFx } = useData();
   const toast = useToast();
   const [editing, setEditing] = useState<Currency | null>(null);
   const [base, setBase] = useState(settings?.baseCurrency || currencies.find((c) => c.base)?.code || 'USD');
   const [saving, setSaving] = useState(false);
+  const [fxBusy, setFxBusy] = useState(false);
 
   async function updateRate(code: string, rate: number) {
     const cur = currencies.find((c) => c.code === code);
@@ -220,8 +239,22 @@ function CurrenciesTab() {
     }
   }
 
+  async function refreshNow() {
+    setFxBusy(true);
+    try {
+      const r = await api.post('/currencies/rates/refresh', {});
+      await Promise.all([refresh(), refreshFx()]);
+      toast(r.fallback ? 'Live rates unavailable — using cached/fallback values' : `Rates updated from ${r.source} (${r.changed} changed)`);
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally {
+      setFxBusy(false);
+    }
+  }
+
   const baseCur = currencies.find((c) => c.code === (settings?.baseCurrency || 'USD'));
   const baseSymbol = baseCur?.symbol || '$';
+  const fxUpdated = fx?.updatedAt ? new Date(fx.updatedAt).toLocaleString() : null;
 
   return (
     <div>
@@ -248,8 +281,22 @@ function CurrenciesTab() {
       <TabCard
         title="Exchange Rates"
         sub="Foreign currency units per 1 USD (the internal ledger base)"
-        action={<span className="badge badge-teal">Base: {baseCur?.code || 'USD'}</span>}
+        action={<div className="flex" style={{ gap: 10, flexWrap: 'wrap' }}>
+          <span className={`badge ${fx?.fallback ? 'badge-red' : 'badge-teal'}`}>
+            <span className="badge-dot" />{fx?.fallback ? 'Fallback rates' : 'Live rates'}
+          </span>
+          <span className="badge badge-gray">{baseCur?.code || 'USD'} base</span>
+          <button className="btn btn-secondary btn-sm" onClick={refreshNow} disabled={fxBusy}>
+            <Icon name="refresh" size={14} /> {fxBusy ? 'Updating…' : 'Refresh now'}
+          </button>
+        </div>}
       >
+        {fxUpdated && (
+          <div className="small muted mb-16">
+            Auto-updated from international FX sources{fx?.source ? ` (${fx.source})` : ''} at <span className="strong">{fxUpdated}</span>.
+            Rates refresh automatically every few hours while the server is running.
+          </div>
+        )}
         <div className="table-wrap">
           <table>
             <thead><tr><th>Code</th><th>Name</th><th>Symbol</th><th className="num">1 USD =</th><th></th></tr></thead>

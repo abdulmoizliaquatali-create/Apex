@@ -1,6 +1,7 @@
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { DataProvider, useData } from './state';
 import { ToastProvider } from './toast';
+import { ThemeProvider } from './theme';
 import Layout from './components/Layout';
 import BootScreen from './components/BootScreen';
 import Dashboard from './pages/Dashboard';
@@ -44,10 +45,12 @@ function Shell() {
 
 export default function App() {
   return (
-    <DataProvider>
-      <ToastProvider>
-        <Shell />
-      </ToastProvider>
-    </DataProvider>
+    <ThemeProvider>
+      <DataProvider>
+        <ToastProvider>
+          <Shell />
+        </ToastProvider>
+      </DataProvider>
+    </ThemeProvider>
   );
 }
