@@ -1,4 +1,4 @@
-import { ReactNode, CSSProperties, useRef, useEffect } from 'react';
+import { ReactNode, CSSProperties, useRef, useEffect, useId } from 'react';
 import { fmt, curSymbol } from '../state';
 import type { Currency } from '../types';
 
@@ -40,7 +40,15 @@ export function Icon({ name, size = 18, className = '' }: { name: string; size?:
     history: <><path d="M3 3v5h5" /><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" /><path d="M12 7v5l4 2" /></>,
     statement: <><path d="M4 2v20" /><path d="M8 6h8" /><path d="M8 10h8" /><path d="M8 14h5" /><path d="M8 18h8" /><path d="M18 22l4-4" /></>,
     sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.9 4.9 1.4 1.4" /><path d="m17.7 17.7 1.4 1.4" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.3 17.7-1.4 1.4" /><path d="m19.1 4.9-1.4 1.4" /></>,
-    moon: <><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></>
+    moon: <><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></>,
+    trendUp: <><path d="m3 17 6-6 4 4 8-8" /><path d="M15 7h6v6" /></>,
+    trendDown: <><path d="m3 7 6 6 4-4 8 8" /><path d="M15 17h6v-6" /></>,
+    arrowRight: <><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></>,
+    sparkles: <><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z" /><path d="M5 3v4" /><path d="M19 17v4" /><path d="M3 5h4" /><path d="M17 19h4" /></>,
+    target: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></>,
+    layers: <><path d="m12 2 9 5-9 5-9-5 9-5z" /><path d="m3 12 9 5 9-5" /><path d="m3 17 9 5 9-5" /></>,
+    clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></>,
+    pin: <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z" /><circle cx="12" cy="10" r="3" /></>
   };
   return (
     <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -80,12 +88,65 @@ export function Modal({ title, children, foot, onClose, size }: { title: ReactNo
   );
 }
 
-export function Stat({ label, value, foot, tone, icon }: { label: string; value: ReactNode; foot?: ReactNode; tone?: string; icon?: string }) {
+export function Stat({ label, value, foot, tone = 'teal', icon, delta, spark }: { label: string; value: ReactNode; foot?: ReactNode; tone?: string; icon?: string; delta?: number; spark?: number[] }) {
   return (
-    <div className={`stat ${tone || 'teal'}`}>
-      <div className="stat-label">{icon && <Icon name={icon} size={15} />}{label}</div>
+    <div className={`stat ${tone}${spark ? ' has-spark' : ''}`}>
+      <div className="stat-top">
+        {icon && <span className="stat-ic"><Icon name={icon} size={16} /></span>}
+        <span className="stat-label">{label}</span>
+        {typeof delta === 'number' && <Trend delta={delta} />}
+      </div>
       <div className="stat-value">{value}</div>
       {foot && <div className="stat-foot">{foot}</div>}
+      {spark && (
+        <div className="stat-spark">
+          <Sparkline data={spark} stroke="var(--primary-2)" width={92} height={34} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Animated trend pill — up (green) / down (red).
+export function Trend({ delta, label }: { delta: number; label?: string }) {
+  const up = delta >= 0;
+  return (
+    <span className={`trend ${up ? 'trend-up' : 'trend-down'}`} title="Month over month">
+      <Icon name={up ? 'trendUp' : 'trendDown'} size={12} />
+      {label || `${Math.abs(delta)}%`}
+    </span>
+  );
+}
+
+// Tiny inline line chart used inside stat cards.
+export function Sparkline({ data, stroke = 'var(--primary-2)', width = 96, height = 34 }: { data: number[]; stroke?: string; width?: number; height?: number }) {
+  const id = useId().replace(/:/g, '');
+  const pts = (() => {
+    if (data.length < 2) return `${width / 2},${height / 2}`;
+    const max = Math.max(...data), min = Math.min(...data);
+    const range = max - min || 1;
+    return data.map((v, i) => `${((i / (data.length - 1)) * width).toFixed(1)},${(height - 3 - ((v - min) / range) * (height - 8)).toFixed(1)}`).join(' ');
+  })();
+  const area = `M0,${height} L${pts.split(' ').join(' L')} L${width},${height} Z`;
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="spark" aria-hidden="true">
+      <defs>
+        <linearGradient id={`sp-${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={stroke} stopOpacity="0.28" />
+          <stop offset="100%" stopColor={stroke} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#sp-${id})`} />
+      <polyline points={pts} fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="spark-line" />
+    </svg>
+  );
+}
+
+// Animated progress bar.
+export function Progress({ value, color = 'var(--primary-2)', height = 8 }: { value: number; color?: string; height?: number }) {
+  return (
+    <div className="progress" style={{ height }}>
+      <div style={{ width: `${Math.min(100, Math.max(0, value))}%`, background: color }} />
     </div>
   );
 }
