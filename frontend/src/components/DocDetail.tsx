@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useData, fmt, curSymbol, today, statusBadge } from '../state';
+import { useAuth, canEdit } from '../auth';
 import { useToast } from '../toast';
 import { api } from '../api';
 import { Modal, Field, Badge, Icon, Loader } from './ui';
@@ -8,6 +9,8 @@ import type { SalesDoc, PurchaseDoc } from '../types';
 
 export default function DocDetail({ doc, kind, onClose, onUpdated }: { doc: SalesDoc | PurchaseDoc; kind: 'sales' | 'purchase'; onClose: () => void; onUpdated?: () => void }) {
   const { currencies, contacts, bankAccounts, settings } = useData();
+  const { user } = useAuth();
+  const editable = canEdit(user);
   const toast = useToast();
   const [payOpen, setPayOpen] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
@@ -70,19 +73,21 @@ export default function DocDetail({ doc, kind, onClose, onUpdated }: { doc: Sale
     ['Contact', party ? `${party.name}` : String(d.customerName || d.supplierName)]
   ];
 
-  // Workflow actions available for this document.
+  // Workflow actions available for this document (editors only; viewers are read-only).
   const actions: { key: string; label: string; icon: string; onClick: () => void; danger?: boolean }[] = [];
-  if (doc.type === 'quotation' && doc.status === 'draft') actions.push({ key: 'sent', label: 'Mark as Sent', icon: 'check', onClick: markSent });
-  if ((doc.type === 'quotation' || doc.type === 'salesOrder') && doc.status !== 'converted' && doc.status !== 'cancelled') {
-    if (doc.type === 'quotation') actions.push({ key: 'so', label: 'Convert to Sales Order', icon: 'copy', onClick: () => convert('salesOrder') });
-    actions.push({ key: 'inv', label: 'Convert to Invoice', icon: 'money', onClick: () => convert('invoice') });
-  }
-  if (doc.type === 'purchaseOrder' && doc.status !== 'received' && doc.status !== 'cancelled') {
-    actions.push({ key: 'recv', label: 'Receive Goods & Create Bill', icon: 'upload', onClick: () => setReceiveOpen(true) });
-  }
-  if ((isInvoice || isBill) && doc.status !== 'cancelled') actions.push({ key: 'pay', label: 'Record Payment', icon: 'money', onClick: () => setPayOpen(true) });
-  if (doc.status !== 'cancelled' && doc.type !== 'payment' && doc.type !== 'supplierPayment') {
-    actions.push({ key: 'cancel', label: 'Void / Cancel', icon: 'trash', onClick: () => setConfirmCancel(true), danger: true });
+  if (editable) {
+    if (doc.type === 'quotation' && doc.status === 'draft') actions.push({ key: 'sent', label: 'Mark as Sent', icon: 'check', onClick: markSent });
+    if ((doc.type === 'quotation' || doc.type === 'salesOrder') && doc.status !== 'converted' && doc.status !== 'cancelled') {
+      if (doc.type === 'quotation') actions.push({ key: 'so', label: 'Convert to Sales Order', icon: 'copy', onClick: () => convert('salesOrder') });
+      actions.push({ key: 'inv', label: 'Convert to Invoice', icon: 'money', onClick: () => convert('invoice') });
+    }
+    if (doc.type === 'purchaseOrder' && doc.status !== 'received' && doc.status !== 'cancelled') {
+      actions.push({ key: 'recv', label: 'Receive Goods & Create Bill', icon: 'upload', onClick: () => setReceiveOpen(true) });
+    }
+    if ((isInvoice || isBill) && doc.status !== 'cancelled') actions.push({ key: 'pay', label: 'Record Payment', icon: 'money', onClick: () => setPayOpen(true) });
+    if (doc.status !== 'cancelled' && doc.type !== 'payment' && doc.type !== 'supplierPayment') {
+      actions.push({ key: 'cancel', label: 'Void / Cancel', icon: 'trash', onClick: () => setConfirmCancel(true), danger: true });
+    }
   }
 
   return (

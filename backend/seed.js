@@ -1,5 +1,6 @@
 import { store, round, uid } from './store.js';
 import { postInvoice, postCustomerPayment, postBill, postSupplierPayment, postExpense } from './ledger.js';
+import { hashPassword } from './auth.js';
 
 const now = new Date('2026-08-05T12:00:00Z');
 const iso = (d) => d.toISOString().slice(0, 10);
@@ -27,9 +28,9 @@ export function seed() {
       sales: true, purchases: true, inventory: true, banking: true, accounting: true, reports: true
     },
     users: [
-      { id: 'u1', name: 'Apex Administrator', email: 'admin@apexgloves.com', phone: '+92 21 3456 7890', role: 'admin', active: true },
-      { id: 'u2', name: 'Accounts Team', email: 'accounts@apexgloves.com', phone: '+92 21 3456 7891', role: 'accountant', active: true },
-      { id: 'u3', name: 'Sales Desk', email: 'salesdesk@apexgloves.com', phone: '+92 21 3456 7892', role: 'viewer', active: false }
+      { id: 'u1', name: 'Apex Administrator', email: 'admin@apexgloves.com', phone: '+92 21 3456 7890', role: 'admin', active: true, passwordHash: hashPassword('admin123') },
+      { id: 'u2', name: 'Accounts Team', email: 'accounts@apexgloves.com', phone: '+92 21 3456 7891', role: 'accountant', active: true, passwordHash: hashPassword('accounts123') },
+      { id: 'u3', name: 'Sales Desk', email: 'salesdesk@apexgloves.com', phone: '+92 21 3456 7892', role: 'viewer', active: false, passwordHash: hashPassword('sales123') }
     ]
   };
 

@@ -1,9 +1,12 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useData, fmt } from '../state';
+import { useAuth, canEdit } from '../auth';
 import { useToast } from '../toast';
 import { api } from '../api';
 import { PageHead, Icon, Badge, Empty, Modal, Field } from '../components/ui';
+import { usePagination, Pagination } from '../components/list';
+import type { JournalEntry } from '../types';
 
 const TYPES = ['asset', 'liability', 'equity', 'income', 'expense'];
 const TYPE_LABEL: Record<string, string> = { asset: 'Assets', liability: 'Liabilities', equity: 'Equity', income: 'Income', expense: 'Expenses' };
@@ -13,9 +16,13 @@ export default function Accounting() {
   const navigate = useNavigate();
 
   return (
-    <div>
-      <PageHead title={view === 'journal' ? 'Journal & Ledger' : 'Chart of Accounts'} sub="Double-entry records, GL balances and multi-currency posting" />
-      <div className="tabs mb-16">
+    <div className="print-area">
+      <PageHead
+        title={view === 'journal' ? 'Journal & Ledger' : 'Chart of Accounts'}
+        sub="Double-entry records, GL balances and multi-currency posting"
+        actions={<button className="btn btn-secondary no-print" onClick={() => window.print()}><Icon name="printer" size={15} /> Print</button>}
+      />
+      <div className="tabs mb-16 no-print">
         <button className={`tab ${view === 'chart' ? 'active' : ''}`} onClick={() => navigate('/accounting/chart')}>Chart of Accounts</button>
         <button className={`tab ${view === 'journal' ? 'active' : ''}`} onClick={() => navigate('/accounting/journal')}>Journal Entries</button>
         <button className={`tab ${view === 'ledger' ? 'active' : ''}`} onClick={() => navigate('/accounting/ledger')}>General Ledger</button>
@@ -30,7 +37,9 @@ export default function Accounting() {
 
 function ChartView() {
   const { accounts, journal, refresh } = useData();
+  const { user } = useAuth();
   const [creating, setCreating] = useState(false);
+  const editable = canEdit(user);
   const balances = useMemo(() => {
     const bal: Record<string, number> = {};
     for (const a of accounts) bal[a.id] = 0;
@@ -42,7 +51,7 @@ function ChartView() {
     <div>
       <div className="flex-between mb-16">
         <span className="small muted">{accounts.length} accounts</span>
-        <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}><Icon name="plus" size={14} /> New Account</button>
+        {editable && <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}><Icon name="plus" size={14} /> New Account</button>}
       </div>
       <div className="card">
         <div className="table-wrap">
@@ -129,13 +138,17 @@ function JournalView() {
   const { journal, accounts, contacts } = useData();
   const [openId, setOpenId] = useState<string | null>(null);
 
+  const sorted = useMemo(() => journal.slice().sort((a, b) => b.date.localeCompare(a.date)), [journal]);
+  const { page, size, go, setSize, slice } = usePagination<JournalEntry>(15);
+  const pageRows = useMemo(() => slice(sorted), [slice, sorted]);
+
   return (
     <div className="card">
       <div className="table-wrap">
         <table>
           <thead><tr><th>Date</th><th>Memo</th><th>Ref</th><th>Type</th><th className="num">Debit</th><th className="num">Credit</th></tr></thead>
           <tbody>
-            {journal.slice().sort((a, b) => b.date.localeCompare(a.date)).map((je) => {
+            {pageRows.map((je) => {
               const dr = je.lines.reduce((s, l) => s + (l.debit || 0), 0);
               const cr = je.lines.reduce((s, l) => s + (l.credit || 0), 0);
               return (
@@ -177,7 +190,8 @@ function JournalView() {
           </tbody>
         </table>
       </div>
-      {!journal.length && <Empty icon="accounting" title="No journal entries" />}
+      {!pageRows.length && <Empty icon="accounting" title="No journal entries" />}
+      {!!pageRows.length && <Pagination page={page} size={size} total={sorted.length} onPage={go} onSize={setSize} />}
     </div>
   );
 }

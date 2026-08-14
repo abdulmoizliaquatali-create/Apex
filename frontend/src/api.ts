@@ -4,15 +4,34 @@
 //   VITE_API_URL=https://apex-backend-xell.onrender.com/api
 const BASE: string = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
 
+// The session (token + user) is shared via localStorage so every request can
+// carry the bearer token without importing the auth module directly.
+function sessionToken(): string | undefined {
+  try {
+    const raw = localStorage.getItem('apex_session');
+    return raw ? ((JSON.parse(raw) as { token?: string }).token) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function req(path: string, opts: RequestInit = {}) {
-  const res = await fetch(BASE + path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...opts
-  });
+  const token = sessionToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(BASE + path, { ...opts, headers });
   if (!res.ok) {
     let msg = res.statusText;
     try { msg = (await res.json()).error || msg; } catch {}
-    throw new Error(msg);
+    if (res.status === 401) {
+      try {
+        localStorage.removeItem('apex_session');
+        window.dispatchEvent(new Event('apex:unauthorized'));
+      } catch {}
+    }
+    const err = new Error(msg) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
   return res.json();
 }

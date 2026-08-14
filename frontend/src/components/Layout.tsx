@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useData } from '../state';
+import { useAuth, ROLE_LABEL } from '../auth';
 import { useTheme } from '../theme';
 import { useToast } from '../toast';
 import { api } from '../api';
@@ -52,9 +53,11 @@ const NAV: { group: string; items: { to: string; label: string; icon: string; mo
 export default function Layout({ children }: { children: ReactNode }) {
   const { settings, dashboard, products, contacts, sales, purchases, currencies, refresh } = useData();
   const { theme, toggle } = useTheme();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const modules = settings?.modules || {};
+  const canAdmin = user?.role === 'admin';
   const openInvoices = dashboard?.kpi?.openInvoices || 0;
   const openBills = dashboard?.kpi?.openBills || 0;
   const lowStock = dashboard?.lowStock?.length || 0;
@@ -62,13 +65,16 @@ export default function Layout({ children }: { children: ReactNode }) {
   const [focused, setFocused] = useState(false);
   const [curOpen, setCurOpen] = useState(false);
   const [curBusy, setCurBusy] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const curRef = useRef<HTMLDivElement>(null);
+  const userRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) setFocused(false);
       if (curRef.current && !curRef.current.contains(e.target as Node)) setCurOpen(false);
+      if (userRef.current && !userRef.current.contains(e.target as Node)) setMenuOpen(false);
     }
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
@@ -111,7 +117,10 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   const visibleNav = NAV.map((g) => ({
     ...g,
-    items: g.items.filter((it) => !it.mod || modules[it.mod] !== false)
+    items: g.items.filter((it) => {
+      if (it.to === '/admin' && !canAdmin) return false;
+      return !it.mod || modules[it.mod] !== false;
+    })
   })).filter((g) => g.items.length);
 
   return (
@@ -186,7 +195,27 @@ export default function Layout({ children }: { children: ReactNode }) {
               </div>
             )}
           </div>
-          <button className="avatar" title="Admin & Settings" onClick={() => navigate('/admin')}>{settings?.company?.shortName?.slice(0, 1) || 'A'}</button>
+          <div className="user-menu" ref={userRef}>
+            <button className="avatar" title={user?.name || 'Account'} onClick={() => setMenuOpen((o) => !o)}>
+              {(user?.name || 'A').slice(0, 1)}
+            </button>
+            {menuOpen && (
+              <div className="user-pop">
+                <div className="user-pop-head">
+                  <div className="strong small">{user?.name}</div>
+                  <div className="tiny muted">{ROLE_LABEL[user?.role || ''] || user?.role}</div>
+                </div>
+                {canAdmin && (
+                  <button className="user-item" onClick={() => { setMenuOpen(false); navigate('/admin'); }}>
+                    <Icon name="settings" size={14} /> Admin &amp; Settings
+                  </button>
+                )}
+                <button className="user-item" onClick={() => { setMenuOpen(false); logout(); }}>
+                  <Icon name="logOut" size={14} /> Sign out
+                </button>
+              </div>
+            )}
+          </div>
         </header>
         <main className="content">{children}</main>
       </div>

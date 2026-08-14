@@ -1,3 +1,4 @@
+import './env.js';
 import express from 'express';
 import cors from 'cors';
 import fs from 'node:fs';
@@ -7,6 +8,8 @@ import { store, round, uid } from './store.js';
 import { seed } from './seed.js';
 import { refreshRates, getRates, startFxScheduler } from './fx.js';
 import { convert, lineTotals, postInvoice, postCustomerPayment, postBill, postSupplierPayment, postBankTransaction, createSalesDoc, createPurchaseDoc, convertSalesDoc, receivePurchaseOrder, adjustStock, cancelDoc } from './ledger.js';
+import { hashPassword, makeToken, verifyToken, bearerToken, safeUser, defaultPasswordFor } from './auth.js';
+import { isSupabaseConfigured, supabaseConfig, loadDatabase } from './supabase.js';
 
 const app = express();
 app.use(cors());
@@ -14,10 +17,108 @@ app.use(express.json({ limit: '50mb' }));
 
 let db = store.db;
 
-if (db.accounts.length === 0) {
-  console.log('No data found - seeding...');
-  seed();
+// Migration: ensure every user has a password hash so the login endpoint works
+// for databases that were seeded before passwords existed.
+function ensureUserPasswords() {
+  const users = db.settings?.users;
+  if (!Array.isArray(users)) return;
+  let changed = false;
+  for (const u of users) {
+    if (!u.passwordHash) {
+      u.passwordHash = hashPassword(defaultPasswordFor(u.role));
+      console.log(`[auth] user ${u.email} had no password - default set to "${defaultPasswordFor(u.role)}"`);
+      changed = true;
+    }
+  }
+  if (changed) store.save();
 }
+
+// Boot is async so Supabase can provide the initial dataset when configured.
+async function boot() {
+  if (isSupabaseConfigured()) {
+    const cfg = supabaseConfig();
+    try {
+      const remote = await loadDatabase(cfg);
+      store.db = remote;
+      store.enableSupabase(cfg);
+      db = store.db;
+      console.log(`[supabase] loaded ${db.currencies.length} currencies, ${db.sales.length} sales, ${db.purchases.length} purchases`);
+    } catch (e) {
+      console.error('[supabase] load failed, falling back to local store:', e.message);
+    }
+  }
+
+  if (db.accounts.length === 0) {
+    console.log('No data found - seeding...');
+    seed();
+  }
+
+  ensureUserPasswords();
+}
+
+boot()
+  .then(() => {
+    const PORT = process.env.PORT || 3001;
+    if (fs.existsSync(distDir)) {
+      app.use(express.static(distDir));
+      app.get(/^(?!\/api\/).*/, (req, res) => res.sendFile(path.join(distDir, 'index.html')));
+      console.log('Serving built frontend from', distDir);
+    } else {
+      console.log('frontend/dist not found - running API-only (use Vite dev server for the UI)');
+    }
+    app.listen(PORT, () => console.log(`Apex backend listening on http://localhost:${PORT}`));
+    startFxScheduler(process.env.FX_REFRESH_HOURS);
+  })
+  .catch((e) => {
+    console.error('[boot] fatal:', e);
+    process.exit(1);
+  });
+
+// ---------------- Auth ----------------
+app.post('/api/login', (req, res) => {
+  const { email, password } = req.body || {};
+  const users = db.settings?.users || [];
+  const user = users.find((u) => String(u.email || '').toLowerCase() === String(email || '').trim().toLowerCase());
+  if (!user || user.passwordHash !== hashPassword(password)) {
+    return res.status(401).json({ error: 'Invalid email or password' });
+  }
+  if (user.active === false) {
+    return res.status(403).json({ error: 'This account is deactivated. Contact an administrator.' });
+  }
+  const token = makeToken({ uid: user.id, role: user.role });
+  res.json({ token, user: safeUser(user) });
+});
+
+app.get('/api/me', (req, res) => {
+  const payload = verifyToken(bearerToken(req));
+  if (!payload) return res.status(401).json({ error: 'Session expired. Please log in again.' });
+  const user = (db.settings?.users || []).find((u) => u.id === payload.uid);
+  if (!user) return res.status(401).json({ error: 'User no longer exists. Please log in again.' });
+  if (user.active === false) return res.status(403).json({ error: 'This account is deactivated. Contact an administrator.' });
+  res.json({ user: safeUser(user), token: makeToken({ uid: user.id, role: user.role }) });
+});
+
+// Mutating routes require a valid session. Viewers are read-only. The login
+// endpoint itself is exempt; GET routes stay public (demo data is read-only).
+app.use((req, res, next) => {
+  const mutating = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method);
+  if (!req.path.startsWith('/api/') || !mutating || req.path === '/api/login') return next();
+  const payload = verifyToken(bearerToken(req));
+  if (!payload) return res.status(401).json({ error: 'Authentication required. Please log in again.' });
+  if (payload.role === 'viewer') return res.status(403).json({ error: 'This account has read-only access.' });
+  req.user = payload;
+  next();
+});
+
+// ---------------- Supabase sync (manual flush, admin only) ----------------
+app.post('/api/sync', requireAdmin, async (req, res) => {
+  try {
+    const summary = await store.syncNow();
+    res.json({ ok: true, ...summary });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // ---------------- Bootstrap ----------------
 app.get('/api/health', (req, res) => res.json({ ok: true }));
@@ -26,9 +127,15 @@ app.get('/api/export', (req, res) => {
   res.json({ exportedAt: new Date().toISOString(), note: 'Apex Gloves - full data backup', db: db });
 });
 
+// Strip password hashes before sending settings to clients.
+function sanitizeSettings(s) {
+  if (!s || !Array.isArray(s.users)) return s;
+  return { ...s, users: s.users.map((u) => { const { passwordHash, ...rest } = u; return rest; }) };
+}
+
 app.get('/api/bootstrap', (req, res) => {
   res.json({
-    settings: db.settings, currencies: db.currencies, accounts: db.accounts,
+    settings: sanitizeSettings(db.settings), currencies: db.currencies, accounts: db.accounts,
     contacts: db.contacts, products: db.products, bankAccounts: db.bankAccounts
   });
 });
@@ -99,7 +206,7 @@ app.post('/api/products/:id/stock-adjust', (req, res) => {
   }
 });
 
-app.post('/api/restore', (req, res) => {
+app.post('/api/restore', requireAdmin, (req, res) => {
   const data = req.body && req.body.db ? req.body.db : req.body;
   if (!data || typeof data !== 'object' || !Array.isArray(data.sales)) {
     return res.status(400).json({ error: 'invalid backup payload' });
@@ -177,10 +284,27 @@ app.post('/api/bank-transactions', (req, res) => {
   res.status(201).json(tx);
 });
 
-app.post('/api/settings', (req, res) => {
-  db.settings = { ...db.settings, ...req.body };
+function requireAdmin(req, res, next) {
+  if (req.user && req.user.role === 'admin') return next();
+  return res.status(403).json({ error: 'Administrator role required for this action.' });
+}
+
+app.post('/api/settings', requireAdmin, (req, res) => {
+  const body = { ...req.body };
+  // Users are edited from the client without the password hash. Keep the
+  // stored hash when it is not supplied, and hash a fresh one when the admin
+  // sets a new password.
+  if (Array.isArray(body.users)) {
+    body.users = body.users.map((u) => {
+      const { password, ...rest } = u;
+      if (password) return { ...rest, passwordHash: hashPassword(password) };
+      const existing = (db.settings?.users || []).find((x) => x.id === u.id);
+      return { ...rest, ...(existing?.passwordHash ? { passwordHash: existing.passwordHash } : { passwordHash: hashPassword(defaultPasswordFor(u.role)) }) };
+    });
+  }
+  db.settings = { ...db.settings, ...body };
   store.save();
-  res.json(db.settings);
+  res.json(sanitizeSettings(db.settings));
 });
 
 // Change the reporting/base currency. Ledger stays in USD internally; this
@@ -216,7 +340,7 @@ app.post('/api/accounts', (req, res) => {
   res.status(201).json(account);
 });
 
-app.post('/api/reset', (req, res) => {
+app.post('/api/reset', requireAdmin, (req, res) => {
   store.reset(seed);
   db = store.db;
   res.json({ ok: true });
@@ -581,22 +705,20 @@ app.delete('/api/:col/:id', (req, res) => {
   res.json({ ok });
 });
 
-const PORT = process.env.PORT || 3001;
-
 // ---------------- Static frontend (production) ----------------
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(__dirname, '..', 'frontend', 'dist');
-if (fs.existsSync(distDir)) {
-  app.use(express.static(distDir));
-  app.get(/^(?!\/api\/).*/, (req, res) => res.sendFile(path.join(distDir, 'index.html')));
-  console.log('Serving built frontend from', distDir);
-} else {
-  console.log('frontend/dist not found - running API-only (use Vite dev server for the UI)');
+
+// Graceful shutdown: flush any pending Supabase sync before exit.
+function shutdown(signal) {
+  console.log(`[shutdown] ${signal} received, flushing Supabase sync...`);
+  store
+    .syncNow()
+    .then(() => process.exit(0))
+    .catch((e) => {
+      console.error('[shutdown] sync flush failed:', e.message);
+      process.exit(1);
+    });
 }
-
-app.listen(PORT, () => {
-  console.log(`Apex backend listening on http://localhost:${PORT}`);
-});
-
-// ---------------- Auto FX scheduler ----------------
-startFxScheduler(process.env.FX_REFRESH_HOURS);
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));

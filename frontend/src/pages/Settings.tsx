@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useData, today } from '../state';
+import { useAuth } from '../auth';
 import { useTheme } from '../theme';
 import { useToast } from '../toast';
 import { api } from '../api';
@@ -18,7 +19,25 @@ const TABS = [
 ];
 
 export default function Settings() {
+  const { user } = useAuth();
   const [tab, setTab] = useState('profile');
+
+  if (user?.role !== 'admin') {
+    return (
+      <div>
+        <PageHead title="Admin & Settings" sub="Control everything about your workspace from one panel" />
+        <div className="card card-pad">
+          <div className="flex" style={{ gap: 12, alignItems: 'center' }}>
+            <Icon name="lock" size={20} />
+            <div>
+              <div className="card-title">Access restricted</div>
+              <div className="card-sub">Only an administrator can manage users, modules and settings. Ask an admin to update your role if you need access.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -519,11 +538,17 @@ function UsersTab() {
 function UserModal({ user, onClose, onSave }: { user: AdminUser | null; onClose: () => void; onSave: (u: Partial<AdminUser>) => void }) {
   const [f, setF] = useState<Partial<AdminUser>>(user || { name: '', email: '', phone: '', role: 'viewer', active: true });
   const set = (k: keyof AdminUser, v: unknown) => setF((x) => ({ ...x, [k]: v }));
+  const [err, setErr] = useState('');
   return (
     <Modal title={user ? `Edit ${user.name}` : 'New User'} onClose={onClose}
       foot={<>
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-        <button className="btn btn-primary" onClick={() => onSave(f)}>Save</button>
+        <button className="btn btn-primary" onClick={() => {
+          if (!f.name || !f.email) return setErr('Name and email are required.');
+          if (!user && !f.password) return setErr('Please set a sign-in password for the new user.');
+          setErr('');
+          onSave(f);
+        }}>Save</button>
       </>}>
       <div className="form-grid">
         <Field label="Full Name"><input className="input" value={f.name || ''} onChange={(e) => set('name', e.target.value)} /></Field>
@@ -534,7 +559,11 @@ function UserModal({ user, onClose, onSave }: { user: AdminUser | null; onClose:
             {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
           </select>
         </Field>
+        <Field label={user ? 'Password (blank keeps current)' : 'Password'}>
+          <input className="input" type="text" value={f.password || ''} onChange={(e) => set('password', e.target.value)} placeholder={user ? '••••••••' : 'Set a sign-in password'} />
+        </Field>
       </div>
+      {err && <div className="alert alert-err small mt-16">{err}</div>}
       <div className="flex mt-16">
         <label className="flex small" style={{ gap: 8 }}>
           <input type="checkbox" checked={!!f.active} onChange={(e) => set('active', e.target.checked)} /> Active user

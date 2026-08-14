@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { syncDatabase } from './supabase.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, 'data');
@@ -54,6 +55,41 @@ class Store {
   save() {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
     fs.writeFileSync(DB_FILE, JSON.stringify(this.db, null, 2));
+    if (this._supabase) this._scheduleSync();
+  }
+
+  // ---- Supabase write-through ----
+
+  enableSupabase(cfg) {
+    this._supabase = cfg;
+  }
+
+  isSupabaseEnabled() {
+    return !!this._supabase;
+  }
+
+  _scheduleSync() {
+    this._syncPending = true;
+    if (this._syncTimer) return;
+    this._syncTimer = setTimeout(() => {
+      this._syncTimer = null;
+      if (!this._syncPending) return;
+      this._syncPending = false;
+      syncDatabase(this._supabase, this.db)
+        .then((summary) => {
+          const cols = Object.keys(summary.collections).length;
+          console.log(`[supabase] synced ${cols} collections, ${summary.deletes} rows removed`);
+        })
+        .catch((e) => console.error('[supabase] sync failed:', e.message));
+    }, 400);
+  }
+
+  // Force an immediate sync (used by /api/sync and graceful shutdown).
+  async syncNow() {
+    if (!this._supabase) return { enabled: false };
+    if (this._syncTimer) { clearTimeout(this._syncTimer); this._syncTimer = null; }
+    this._syncPending = false;
+    return syncDatabase(this._supabase, this.db);
   }
 
   reset(seedFn) {

@@ -1,16 +1,28 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useData, fmt, fmtQty, today } from '../state';
+import { useData, fmt, fmtQty } from '../state';
+import { useAuth, canEdit } from '../auth';
 import { useToast } from '../toast';
 import { api } from '../api';
 import { PageHead, Icon, Modal, Field, Empty, Loader } from '../components/ui';
+import { useSort, usePagination, Pagination, FilterBar } from '../components/list';
 import type { Product, SalesDoc, PurchaseDoc, JournalEntry } from '../types';
 
 const CATS = ['All', 'Disposable', 'Work', 'Cut-Resistant', 'Leather', 'Welding', 'Winter', 'Knit', 'Household', 'Chemical'];
+const SORTS = [
+  { key: 'name', label: 'Name' },
+  { key: 'sku', label: 'SKU' },
+  { key: 'category', label: 'Category' },
+  { key: 'qty', label: 'Stock level' },
+  { key: 'cost', label: 'Cost price' },
+  { key: 'price', label: 'Sell price' }
+];
 
 export default function Products() {
   const { products, sales, purchases, journal, refresh } = useData();
+  const { user } = useAuth();
   const toast = useToast();
+  const editable = canEdit(user);
   const [params] = useSearchParams();
   const [q, setQ] = useState(params.get('q') || '');
   const [cat, setCat] = useState('All');
@@ -23,6 +35,11 @@ export default function Products() {
     (cat === 'All' || p.category === cat) &&
     (!q || p.name.toLowerCase().includes(q.toLowerCase()) || p.sku.toLowerCase().includes(q.toLowerCase()))
   ), [products, cat, q]);
+
+  const { sortKey, sortDir, toggle, apply } = useSort<Product>('name', 'asc');
+  const sorted = useMemo(() => apply(filtered), [apply, filtered]);
+  const { page, size, go, setSize, reset, slice } = usePagination<Product>(12);
+  const pageRows = useMemo(() => slice(sorted), [slice, sorted]);
 
   const totalValue = products.reduce((s, p) => s + p.qty * p.cost, 0);
   const totalRetail = products.reduce((s, p) => s + p.qty * p.price, 0);
@@ -43,11 +60,14 @@ export default function Products() {
   const lowPct = (p: Product) => Math.min(100, (p.qty / Math.max(p.reorder * 2, 1)) * 100);
 
   return (
-    <div>
+    <div className="print-area">
       <PageHead
         title="Products & Stock"
         sub={`${products.length} glove SKUs across ${CATS.length - 1} categories`}
-        actions={<button className="btn btn-primary" onClick={() => { setEditing(null); setCreating(true); }}><Icon name="plus" size={15} /> New Product</button>}
+        actions={<>
+          <button className="btn btn-secondary no-print" onClick={() => window.print()}><Icon name="printer" size={15} /> Print</button>
+          {editable && <button className="btn btn-primary" onClick={() => { setEditing(null); setCreating(true); }}><Icon name="plus" size={15} /> New Product</button>}
+        </>}
       />
 
       <div className="grid grid-4 mb-16">
@@ -57,43 +77,49 @@ export default function Products() {
         <div className="card card-pad"><div className="tiny muted">Below Reorder Point</div><div className="strong" style={{ fontSize: 22, color: lowCount ? 'var(--danger)' : 'var(--success)' }}>{lowCount}</div></div>
       </div>
 
-      <div className="toolbar">
+      <div className="toolbar no-print">
         <div className="seg">
           {CATS.map((c) => <button key={c} className={c === cat ? 'active' : ''} onClick={() => setCat(c)}>{c}</button>)}
         </div>
         <div className="grow" />
-        <div className="search-box"><Icon name="search" size={14} /><input placeholder="Search by name or SKU..." value={q} onChange={(e) => setQ(e.target.value)} /></div>
+        <select className="select" style={{ width: 150 }} value={sortKey} onChange={(e) => toggle(e.target.value)} title="Sort by">
+          {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}{sortKey === s.key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}</option>)}
+        </select>
+        <FilterBar query={q} onQuery={(v) => { setQ(v); reset(); }} placeholder="Search by name or SKU..." />
       </div>
 
-      {filtered.length ? (
-        <div className="product-grid">
-          {filtered.map((p) => {
-            const low = p.qty <= p.reorder;
-            return (
-              <div className="product-card" key={p.id} onClick={() => { setCreating(true); setEditing(p); }}>
-                <div className="flex-between">
-                  <span className="product-cat">{p.category}</span>
-                  <span className="flex" style={{ gap: 4 }}>
-                    <button className="icon-btn" title="Adjust stock" onClick={(e) => { e.stopPropagation(); setAdjust(p); }}><Icon name="edit" size={14} /></button>
-                    <button className="icon-btn" title="Stock movement history" onClick={(e) => { e.stopPropagation(); setHistory(p); }}><Icon name="history" size={14} /></button>
-                    <span className="tiny muted">{p.sku}</span>
-                  </span>
-                </div>
-                <div className="product-name">{p.name}</div>
-                <div className="product-meta">{p.material} · Size {p.size} · {p.color} · {p.unit}{p.imported ? ` · Imported (${p.origin})` : ` · Local (${p.origin})`}</div>
-                <div className="stock-row">
-                  <div>
-                    <span className="strong" style={{ fontSize: 16 }}>{fmtQty(p.qty)}</span>
-                    <span className="tiny muted"> in stock</span>
-                    <div className="tiny" style={{ color: low ? 'var(--danger)' : 'var(--text-3)' }}>{low ? `Reorder at ${fmtQty(p.reorder)}` : `Reorder at ${fmtQty(p.reorder)}`}</div>
+      {pageRows.length ? (
+        <>
+          <div className="product-grid">
+            {pageRows.map((p) => {
+              const low = p.qty <= p.reorder;
+              return (
+                <div className="product-card" key={p.id} onClick={() => { if (editable) { setCreating(true); setEditing(p); } }}>
+                  <div className="flex-between">
+                    <span className="product-cat">{p.category}</span>
+                    <span className="flex" style={{ gap: 4 }}>
+                      {editable && <button className="icon-btn" title="Adjust stock" onClick={(e) => { e.stopPropagation(); setAdjust(p); }}><Icon name="edit" size={14} /></button>}
+                      <button className="icon-btn" title="Stock movement history" onClick={(e) => { e.stopPropagation(); setHistory(p); }}><Icon name="history" size={14} /></button>
+                      <span className="tiny muted">{p.sku}</span>
+                    </span>
                   </div>
-                  <span className="price-tag">{fmt(p.price)}</span>
+                  <div className="product-name">{p.name}</div>
+                  <div className="product-meta">{p.material} · Size {p.size} · {p.color} · {p.unit}{p.imported ? ` · Imported (${p.origin})` : ` · Local (${p.origin})`}</div>
+                  <div className="stock-row">
+                    <div>
+                      <span className="strong" style={{ fontSize: 16 }}>{fmtQty(p.qty)}</span>
+                      <span className="tiny muted"> in stock</span>
+                      <div className="tiny" style={{ color: low ? 'var(--danger)' : 'var(--text-3)' }}>{low ? `Reorder at ${fmtQty(p.reorder)}` : `Reorder at ${fmtQty(p.reorder)}`}</div>
+                    </div>
+                    <span className="price-tag">{fmt(p.price)}</span>
+                  </div>
+                  <div className="stock-bar"><div style={{ width: `${lowPct(p)}%`, background: low ? 'var(--danger)' : 'var(--primary-2)' }} /></div>
                 </div>
-                <div className="stock-bar"><div style={{ width: `${lowPct(p)}%`, background: low ? 'var(--danger)' : 'var(--primary-2)' }} /></div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+          <Pagination page={page} size={size} total={sorted.length} onPage={go} onSize={setSize} />
+        </>
       ) : (
         <Empty icon="box" title="No products match" sub="Try a different category or search term" />
       )}

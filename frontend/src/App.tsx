@@ -1,9 +1,11 @@
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { DataProvider, useData } from './state';
+import { AuthProvider, useAuth } from './auth';
 import { ToastProvider } from './toast';
 import { ThemeProvider } from './theme';
 import Layout from './components/Layout';
 import BootScreen from './components/BootScreen';
+import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Sales from './pages/Sales';
 import Purchases from './pages/Purchases';
@@ -16,7 +18,14 @@ import Settings from './pages/Settings';
 
 function Shell() {
   const { ready, refreshing } = useData();
+  const { user, checking } = useAuth();
   const location = useLocation();
+
+  // Validating the stored session against the backend.
+  if (checking) return <BootScreen />;
+
+  // No valid session — show the login screen (data boot continues in background).
+  if (!user) return <Login />;
 
   if (!ready) return <BootScreen />;
 
@@ -46,11 +55,13 @@ function Shell() {
 export default function App() {
   return (
     <ThemeProvider>
-      <DataProvider>
-        <ToastProvider>
-          <Shell />
-        </ToastProvider>
-      </DataProvider>
+      <AuthProvider>
+        <DataProvider>
+          <ToastProvider>
+            <Shell />
+          </ToastProvider>
+        </DataProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }

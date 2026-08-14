@@ -39,8 +39,8 @@ the inventory ledger matches on-hand stock exactly.
 | Layer     | Tech                                                        |
 |-----------|-------------------------------------------------------------|
 | Frontend  | Vite + React 18 + TypeScript, React Router, recharts, jsPDF |
-| Backend   | Express (Node.js), JSON-file persistence                    |
-| Data      | `backend/data/db.json` (gitignored)                         |
+| Backend   | Express (Node.js), JSON-file persistence + optional Supabase |
+| Data      | `backend/data/db.json` (gitignored) or Supabase Postgres    |
 | Currency  | PKR base; FX rates for USD, CNY, VND, EUR, GBP, AED         |
 
 ## Features
@@ -58,6 +58,12 @@ the inventory ledger matches on-hand stock exactly.
 - **Reports** — profit & loss, balance sheet, cash flow, inventory valuation,
   sales analysis, purchase analysis, AR/AP aging — all exportable to PDF/CSV.
 - **Contacts** — customers & suppliers with credit limits and per-contact statements.
+- **Login & roles** — email/password sign-in with admin / accountant / viewer
+  roles; admins manage users, modules and settings; viewers are read-only.
+  Demo logins: `admin@apexgloves.com` / `admin123`,
+  `accounts@apexgloves.com` / `accounts123`.
+- **List power tools** — sortable columns, live filtering and pagination on
+  every list, plus one-click browser printing (PDF export stays available).
 - **Extras** — global search, document duplication, dark sidebar shell,
   animated loading states (count-up KPIs, skeleton loaders, page transitions).
 
@@ -131,8 +137,10 @@ The API lives under `/api` on that URL, e.g. `https://<service>.onrender.com/api
 
 > **Free-tier caveats:** the Render instance sleeps after ~15 minutes of
 > inactivity and wakes on the next request (first load ~30–50 s). The backend
-> filesystem is ephemeral — demo data re-seeds on every redeploy. For persistent
-> data, switch the store to a hosted database (e.g. Supabase free tier).
+> filesystem is ephemeral — demo data re-seeds on every redeploy. For **durable**
+> data, point the backend at a hosted Postgres database:
+> see [`backend/supabase/README.md`](backend/supabase/README.md) for the free
+> Supabase setup (schema + `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`).
 
 ### Local development
 
@@ -153,17 +161,22 @@ defaults to same-origin `/api`, and `vite.config.ts` proxies it to `:3001`.
 ```
 frontend/                  Vite + React + TS single-page app
   src/api.ts               fetch wrapper for /api (auto-prefixes requests)
+  src/auth.tsx             AuthProvider — session, login/logout, roles
   src/state.tsx            DataProvider (settings, docs, journal, dashboard)
-  src/components/          Layout, DocumentModal, DocDetail, ui kit
-  src/pages/               Dashboard, Sales, Purchases, Products, Contacts,
-                           Banking, Accounting, Reports, Settings
+  src/components/          Layout, DocumentModal, DocDetail, ui kit, list kit
+  src/pages/               Login, Dashboard, Sales, Purchases, Products,
+                           Contacts, Banking, Accounting, Reports, Settings
   src/utils/pdf.ts         lazy-loaded jsPDF document/report exporter
 backend/
   server.js                Express routes, reports, generic CRUD, duplication
+  auth.js                  login tokens, password hashing, role checks
+  env.js                   minimal .env loader (no dependency)
+  supabase.js              PostgREST adapter — load + write-through sync
   ledger.js                double-entry posting (invoices, bills, payments…)
   seed.js                  full, self-consistent demo dataset
-  store.js                 JSON persistence + sequences
+  store.js                 JSON persistence + sequences + Supabase sync hook
   data/db.json             runtime database (gitignored)
+  supabase/                schema migration + setup docs
 ```
 
 ### Data model

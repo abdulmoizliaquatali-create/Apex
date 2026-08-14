@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useData, fmt, today } from '../state';
+import { useAuth, canEdit } from '../auth';
 import { useToast } from '../toast';
 import { api } from '../api';
 import { PageHead, Icon, Modal, Field, Empty, CountUp } from '../components/ui';
 
 export default function Banking() {
   const { bankAccounts, journal, accounts, currencies, refresh, refreshDashboard } = useData();
+  const { user } = useAuth();
   const toast = useToast();
+  const editable = canEdit(user);
   const [addOpen, setAddOpen] = useState(false);
 
   const balances = useMemo(() => {
@@ -70,7 +73,7 @@ export default function Banking() {
         actions={<>
           <button className="btn btn-secondary" onClick={exportCSV}><Icon name="download" size={15} /> Export CSV</button>
           <button className="btn btn-secondary" onClick={exportBackup}><Icon name="download" size={15} /> Backup</button>
-          <button className="btn btn-primary" onClick={() => setAddOpen(true)}><Icon name="plus" size={15} /> New Transaction</button>
+          {editable && <button className="btn btn-primary" onClick={() => setAddOpen(true)}><Icon name="plus" size={15} /> New Transaction</button>}
         </>}
       />
 

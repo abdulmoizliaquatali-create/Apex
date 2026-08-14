@@ -46,11 +46,12 @@ export default function Reports() {
   const meta = REPORTS.find((r) => r.id === report);
 
   return (
-    <div>
+    <div className="print-area">
       <PageHead
         title="Reports"
         sub="Financial statements and business analytics"
         actions={<>
+          <button className="btn btn-secondary no-print" onClick={() => window.print()}><Icon name="printer" size={15} /> Print</button>
           {['profit-loss', 'cash-flow', 'sales-analysis', 'purchase-analysis'].includes(report) && (
             <>
               <input type="date" className="input input-sm" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -61,7 +62,7 @@ export default function Reports() {
         </>}
       />
 
-      <div className="toolbar">
+      <div className="toolbar no-print">
         <div className="tabs" style={{ flexWrap: 'wrap', maxWidth: 800 }}>
           {REPORTS.map((r) => (
             <button key={r.id} className={`tab ${r.id === report ? 'active' : ''}`} onClick={() => setReport(r.id)}>{r.label}</button>

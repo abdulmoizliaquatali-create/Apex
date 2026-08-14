@@ -16,6 +16,7 @@ export interface Settings {
 
 export interface AdminUser {
   id: string; name: string; email: string; phone?: string; role: 'admin' | 'accountant' | 'viewer'; active: boolean;
+  password?: string;
 }
 
 export const MODULE_DEFS: { key: string; label: string; desc: string; icon: string }[] = [

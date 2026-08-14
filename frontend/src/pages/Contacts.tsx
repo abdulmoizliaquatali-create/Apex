@@ -1,32 +1,48 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useData, fmt, curSymbol } from '../state';
+import { useAuth, canEdit } from '../auth';
 import { useToast } from '../toast';
 import { api } from '../api';
 import { PageHead, Icon, Modal, Field, Badge, Empty } from '../components/ui';
+import { useSort, SortTh, usePagination, Pagination, FilterBar } from '../components/list';
 import type { Contact, SalesDoc, PurchaseDoc } from '../types';
+
+type EnrichedContact = Contact & { outstanding: number; total: number; docCount: number };
 
 export default function Contacts() {
   const { kind } = useParams();
   const navigate = useNavigate();
   const { contacts, sales, purchases, currencies, refresh } = useData();
+  const { user } = useAuth();
   const toast = useToast();
+  const editable = canEdit(user);
   const [params] = useSearchParams();
   const [q, setQ] = useState(params.get('q') || '');
   const [modal, setModal] = useState<{ open: boolean; contact: Contact | null }>({ open: false, contact: null });
   const [stmt, setStmt] = useState<Contact | null>(null);
 
   const isCustomer = kind === 'customers';
-  const list = useMemo(() => contacts
+  const enriched = useMemo(() => contacts
     .filter((c) => c.kind === (isCustomer ? 'customer' : 'supplier'))
-    .filter((c) => !q || c.name.toLowerCase().includes(q.toLowerCase()) || c.country.toLowerCase().includes(q.toLowerCase()))
     .map((c) => {
       const docs = isCustomer ? sales.filter((d) => d.type === 'invoice' && d.customerId === c.id) : purchases.filter((d) => d.type === 'bill' && d.supplierId === c.id);
       const outstanding = docs.reduce((s, d) => s + (d.totalUsd - (d.paidUsd || 0)), 0);
       const total = docs.reduce((s, d) => s + d.totalUsd, 0);
       return { ...c, outstanding: Math.max(0, outstanding), total, docCount: docs.length };
-    })
-    .sort((a, b) => b.total - a.total), [contacts, sales, purchases, isCustomer, q]);
+    }), [contacts, sales, purchases, isCustomer]);
+
+  const list = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return enriched.filter((c) => !t || c.name.toLowerCase().includes(t) || c.country.toLowerCase().includes(t));
+  }, [enriched, q]);
+
+  const { sortKey, sortDir, toggle, apply } = useSort<EnrichedContact>('total', 'desc');
+  const sorted = useMemo(() => apply(list), [apply, list]);
+  const { page, size, go, setSize, reset, slice } = usePagination<EnrichedContact>(10);
+  const pageRows = useMemo(() => slice(sorted), [slice, sorted]);
+
+  useEffect(() => { reset(); }, [isCustomer, reset]);
 
   const totalOutstanding = list.reduce((s, c) => s + c.outstanding, 0);
   const totalVolume = list.reduce((s, c) => s + c.total, 0);
@@ -44,11 +60,14 @@ export default function Contacts() {
   }
 
   return (
-    <div>
+    <div className="print-area">
       <PageHead
         title={isCustomer ? 'Customers' : 'Suppliers'}
         sub={isCustomer ? 'Local & international glove buyers' : 'Local manufacturers & overseas factories'}
-        actions={<button className="btn btn-primary" onClick={() => setModal({ open: true, contact: null })}><Icon name="plus" size={15} /> New {isCustomer ? 'Customer' : 'Supplier'}</button>}
+        actions={<>
+          <button className="btn btn-secondary no-print" onClick={() => window.print()}><Icon name="printer" size={15} /> Print</button>
+          {editable && <button className="btn btn-primary" onClick={() => setModal({ open: true, contact: null })}><Icon name="plus" size={15} /> New {isCustomer ? 'Customer' : 'Supplier'}</button>}
+        </>}
       />
 
       <div className="grid grid-3 mb-16">
@@ -57,13 +76,13 @@ export default function Contacts() {
         <div className="card card-pad"><div className="tiny muted">{isCustomer ? 'Lifetime Sales' : 'Lifetime Purchases'}</div><div className="strong" style={{ fontSize: 22 }}>{fmt(totalVolume)}</div></div>
       </div>
 
-      <div className="toolbar">
+      <div className="toolbar no-print">
         <div className="tabs">
           <button className={`tab ${isCustomer ? 'active' : ''}`} onClick={() => navigate('/contacts/customers')}>Customers</button>
           <button className={`tab ${!isCustomer ? 'active' : ''}`} onClick={() => navigate('/contacts/suppliers')}>Suppliers</button>
         </div>
         <div className="grow" />
-        <div className="search-box"><Icon name="search" size={14} /><input placeholder="Search by name or country..." value={q} onChange={(e) => setQ(e.target.value)} /></div>
+        <FilterBar query={q} onQuery={(v) => { setQ(v); reset(); }} placeholder="Search by name or country..." />
       </div>
 
       <div className="card">
@@ -71,14 +90,18 @@ export default function Contacts() {
           <table>
             <thead>
               <tr>
-                <th>Name</th><th>Contact</th><th>Location</th><th>Type</th><th>Currency</th>
-                <th className="num">{isCustomer ? 'Volume' : 'Volume'}</th>
-                <th className="num">Outstanding</th>
+                <SortTh k="name" sortKey={sortKey} sortDir={sortDir} onSort={toggle}>Name</SortTh>
+                <th>Contact</th>
+                <SortTh k="country" sortKey={sortKey} sortDir={sortDir} onSort={toggle}>Location</SortTh>
+                <th>Type</th>
+                <SortTh k="currency" sortKey={sortKey} sortDir={sortDir} onSort={toggle}>Currency</SortTh>
+                <SortTh k="total" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="num">Volume</SortTh>
+                <SortTh k="outstanding" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="num">Outstanding</SortTh>
                 <th>Status</th><th></th>
               </tr>
             </thead>
             <tbody>
-              {list.map((c) => (
+              {pageRows.map((c) => (
                 <tr key={c.id}>
                   <td>
                     <div className="flex" style={{ gap: 10 }}>
@@ -99,7 +122,7 @@ export default function Contacts() {
                   <td>
                     <div className="row-actions">
                       <button className="icon-btn" title="Statement" onClick={() => setStmt(c)}><Icon name="statement" size={14} /></button>
-                      <button className="btn btn-ghost btn-xs" onClick={() => setModal({ open: true, contact: c })}><Icon name="edit" size={14} /></button>
+                      {editable && <button className="btn btn-ghost btn-xs" onClick={() => setModal({ open: true, contact: c })}><Icon name="edit" size={14} /></button>}
                     </div>
                   </td>
                 </tr>
@@ -107,7 +130,8 @@ export default function Contacts() {
             </tbody>
           </table>
         </div>
-        {!list.length && <Empty icon={isCustomer ? 'customers' : 'suppliers'} title={`No ${isCustomer ? 'customers' : 'suppliers'} yet`} sub="Add one to start trading" />}
+        {!pageRows.length && <Empty icon={isCustomer ? 'customers' : 'suppliers'} title={`No ${isCustomer ? 'customers' : 'suppliers'} yet`} sub="Add one to start trading" />}
+        {!!pageRows.length && <Pagination page={page} size={size} total={sorted.length} onPage={go} onSize={setSize} />}
       </div>
 
       {modal.open && (
