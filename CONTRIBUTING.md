@@ -1,68 +1,57 @@
 # Contributing to Apex ERP
 
-Thanks for taking the time to contribute! This guide covers how to work on the
-codebase, keep it consistent, and get your changes merged.
+Thanks for taking the time to contribute! Please read the project
+[README](README.md) first to understand the architecture, then follow the
+guidelines below.
 
-## Getting started
+## Development setup
 
-1. Fork the repo and clone your fork.
-2. Install dependencies:
+```bash
+# 1. Install dependencies
+cd backend && npm install
+cd ../frontend && npm install
 
-   ```bash
-   cd backend && npm install
-   cd ../frontend && npm install
-   ```
+# 2. Run both services (the frontend proxies /api to the backend)
+./start.sh
+```
 
-3. Start the dev servers (`./start.sh`) and confirm the app loads at
-   http://localhost:5173 with the demo dataset.
+- Backend API: http://localhost:3001
+- Frontend app: http://localhost:5173
 
 ## Code style
 
-- TypeScript on the frontend — the production build (`npm run build`) runs
-  `tsc -b` and must pass with no errors.
-- ES modules everywhere; `import`/`export`, no CommonJS.
-- No lint config is enforced, but keep it consistent with the surrounding code:
-  two-space indent, single quotes, semicolons.
-- Do not leave debug `console.log` statements or commented-out code.
+- **Frontend**: TypeScript via `tsc -b`. Keep components in
+  `frontend/src/components`, pages in `frontend/src/pages`. Use the shared UI
+  kit and list toolkit (`list.tsx`) rather than hand-rolled tables.
+- **Backend**: plain Node ESM (`.js`). Keep route handlers thin; put business
+  logic in `ledger.js` and persistence in `store.js`.
+- Do not add comments unless they explain *why* something is done.
+- Keep the two projects lint/type-clean: `npm run build` must pass in
+  `frontend/` and every backend file must pass `node --check`.
 
-## Frontend conventions
+## Pull requests
 
-- **Never write an `/api` prefix in page/modal code.** `src/api.ts` already
-  prepends `/api` to every request, so API calls should use prefixless paths
-  (e.g. `api.post('/sales/123/convert')`). A doubled `/api/api/...` path is a
-  regression.
-- Add reusable UI to `src/components/ui.tsx`; keep page-specific JSX in the
-  page component under `src/pages/`.
-- Money is always formatted through the shared `fmt()` helper in `src/state.tsx`,
-  which honors the current reporting base currency.
+1. Create a focused branch: `YYMMDD-feat-<summary>` (or `fix-`, `chore-`).
+2. Make changes, add tests where practical, and verify:
+   ```bash
+   cd frontend && npm run build
+   node --check backend/server.js
+   ```
+3. Write a clear commit message using conventional commits:
+   `feat(scope): summary`, `fix(scope): summary`, `chore: summary`.
+4. Open a pull request with a short description of the change and why it is
+   needed. Reference any related issue.
 
-## Backend conventions
+## Reporting issues
 
-- Add endpoints to `server.js` (or a small focused module imported by it).
-- Every document workflow change must keep the books balanced: debits = credits
-  in every `journalEntries` row, and stock movements must match the inventory
-  ledger.
-- After changing `backend/seed.js` or `server.js`, restart the backend and reset
-  the demo data (`POST /api/reset`) before verifying.
+Please include:
 
-## Verifying changes
+- Steps to reproduce
+- Expected vs actual behaviour
+- Browser/OS and any relevant console output
+- Whether you are running the JSON store or Supabase mode
 
-```bash
-# frontend type-check + production build
-cd frontend && npm run build
+## Security
 
-# backend up and books balance
-curl http://localhost:3001/api/reports/balance-sheet
-```
-
-## Commit & PR workflow
-
-1. Create a feature branch: `260816-feat-my-change` or similar.
-2. Commit with a conventional-style message, e.g. `feat(sales): add draft status`
-   or `fix(reports): correct cash-flow sign`.
-3. Open a PR with the template; describe what changed and why, and how you
-   verified it.
-
-## Code of conduct
-
-Be respectful and constructive. Keep discussions focused on the code.
+Do not include real credentials (Supabase keys, `AUTH_SECRET`) in commits or
+issues. See [SECURITY.md](SECURITY.md) for how to report a vulnerability.
