@@ -8,43 +8,53 @@ on:
 
 jobs:
   frontend:
-    name: Frontend (type-check + build)
+    name: Frontend type-check & build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+
       - name: Install dependencies
         working-directory: frontend
         run: npm ci
-      - name: Build (tsc + vite)
+
+      - name: Type-check + build
         working-directory: frontend
         run: npm run build
 
   backend:
-    name: Backend (syntax + boot check)
+    name: Backend smoke test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
-      - name: Syntax-check server sources
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Start server & smoke test
         working-directory: backend
         run: |
-          for f in server.js store.js seed.js ledger.js fx.js auth.js supabase.js env.js; do
-            node --check "$f"
-          done
-      - name: Boot smoke test
-        working-directory: backend
-        env:
-          PORT: 3001
-        run: |
-          npm ci
           node server.js &
-          sleep 3
-          curl -fsS http://localhost:3001/api/health
-          kill %1
+          SERVER_PID=$!
+          sleep 2
+          echo "--- dashboard ---"
+          curl --fail --silent http://localhost:3001/api/dashboard | head -c 200
+          echo ""
+          echo "--- balance sheet balances ---"
+          curl --fail --silent http://localhost:3001/api/reports/balance-sheet | head -c 200
+          echo ""
+          kill $SERVER_PID

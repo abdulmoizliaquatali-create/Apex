@@ -149,7 +149,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
         ))}
         <div className="sidebar-footer">
-          Apex ERP v3.0.0 · Trading &amp; accounting suite<br />Data stored locally
+          Apex ERP v1.7.0 · Trading &amp; accounting suite<br />Data stored locally
         </div>
       </aside>
       <div className="main">
