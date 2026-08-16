@@ -4,7 +4,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.6.0] - 2026-08-16
+
+### Added
+- Professional repo housekeeping: `CHANGELOG.md`, `SECURITY.md`,
+  `CODE_OF_CONDUCT.md`, `.editorconfig`, and a tag-triggered GitHub Release
+  workflow (auto-creates releases on `v*` tags).
+- Version bumps to `1.6.0` in `package.json` and the in-app footer.
 
 ### Fixed
 - Backup export (`GET /api/export`) is now restricted to administrators — it
@@ -14,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`backend/supabase.js`) that added junk keys to the in-memory database.
 - Removed a duplicate sortable column key on the Sales "Outstanding" column.
 
-## [1.7.0] - 2026-08-16
+## [1.5.0] - 2026-08-16
 
 ### Added
 - **Login & role-based access**: email/password sign-in with `admin`,
@@ -38,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unconfigured.
 - Minimal dependency-free `.env` loader for the backend.
 
-## [1.6.0] - 2026-08-12
+## [1.4.0] - 2026-08-12
 
 ### Added
 - Designer-level UI/UX overhaul: premium glassmorphism design system,
@@ -49,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard hero banner, stat sparklines, low-stock progress bars and a recent
   transactions table.
 
-## [1.5.0] - 2026-08-12
+## [1.3.0] - 2026-08-12
 
 ### Added
 - **Glassmorphism light/dark theme** with system-preference detection and a
@@ -58,42 +64,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fallback snapshot, boot refresh, `FX_REFRESH_HOURS` scheduler, live/fallback
   badges and manual refresh in the Currencies tab.
 
-## [1.4.0] - 2026-08-12
+## [1.2.0] - 2026-08-12
 
 ### Added
 - Split deployment: Netlify (frontend SPA) + Render (backend API) with
   `VITE_API_URL`, `netlify.toml` and static-frontend serving from the backend.
 
-## [1.3.0] - 2026-08-12
+## [1.1.0] - 2026-08-12
 
 ### Added
 - Single-service production build with a Render blueprint; lazy-loaded PDF
   export to keep the main bundle small.
 
-## [1.2.0] - 2026-08-11
+## [1.0.0] - 2026-08-11
 
 ### Added
 - PKR reporting base currency with live display conversion via a shared `fmt()`
-  helper; currency switching from the topbar; repo hardening (gitignore,
-  README, seed consistency).
+  helper; currency switching from the topbar.
+- Admin panel (company profile, preferences, currencies, bank accounts, users,
+  modules, backup), workflow automation (quote → order → invoice, purchase
+  order → receive → bill, payments, stock adjustments, voiding), base currency
+  switching and PDF document/report export.
+- Core trading & accounting suite: double-entry ledger, sales / purchasing /
+  inventory / contacts / banking / accounting / reports modules, seeded
+  multi-currency demo dataset.
 
-## [1.1.0] - 2026-08-11
-
-### Added
-- Base currency switching, PDF document/report export, admin panel
-  (company profile, preferences, currencies, bank accounts, users, modules,
-  backup), and workflow automation (quote → order → invoice, purchase order →
-  receive → bill, payments, stock adjustments, voiding).
-
-## [1.0.0] - 2026-08-05
-
-### Added
-- Initial trading & accounting suite for Apex Gloves: double-entry ledger,
-  sales/purchasing/inventory/contacts/banking/accounting/reports modules,
-  seeded multi-currency demo dataset, and PDF exports.
-
-[Unreleased]: https://github.com/abdulmoizliaquatali-create/Apex/compare/v1.7.0...HEAD
-[1.7.0]: https://github.com/abdulmoizliaquatali-create/Apex/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/abdulmoizliaquatali-create/Apex/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/abdulmoizliaquatali-create/Apex/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/abdulmoizliaquatali-create/Apex/compare/v1.3.0...v1.4.0
