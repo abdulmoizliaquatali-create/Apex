@@ -134,10 +134,6 @@ export async function loadDatabase(cfg) {
     sales: [], purchases: [], bankAccounts: [], bankTransactions: [], journalEntries: [],
     sequences: await fetchSequences(cfg)
   };
-  for (const [_, table] of COLLECTION_TABLES) {
-    db[COLLECTION_TABLES.find(([c]) => c === table && c) ? table : table] = [];
-  }
-  // The mapping is stored as [collection, table]; fill each collection.
   for (const [collection, table] of COLLECTION_TABLES) {
     db[collection] = await fetchCollection(cfg, table);
   }

@@ -99,7 +99,7 @@ export default function Sales() {
                 <SortTh k="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggle}>Due / Valid</SortTh>
                 <SortTh k="totalUsd" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="num">Total</SortTh>
                 <SortTh k="paidUsd" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="num">Paid</SortTh>
-                <SortTh k="totalUsd" sortKey={sortKey} sortDir={sortDir} onSort={toggle} className="num">Outstanding</SortTh>
+                <th className="num">Outstanding</th>
                 <SortTh k="status" sortKey={sortKey} sortDir={sortDir} onSort={toggle}>Status</SortTh>
                 <th style={{ width: 44 }}></th>
               </tr>

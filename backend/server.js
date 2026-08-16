@@ -123,7 +123,11 @@ app.post('/api/sync', requireAdmin, async (req, res) => {
 // ---------------- Bootstrap ----------------
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
+// Backup export contains the full database (including password hashes), so it
+// is restricted to administrators.
 app.get('/api/export', (req, res) => {
+  const payload = verifyToken(bearerToken(req));
+  if (!payload || payload.role !== 'admin') return res.status(403).json({ error: 'Administrator role required for backup export.' });
   res.json({ exportedAt: new Date().toISOString(), note: 'Apex Gloves - full data backup', db: db });
 });
 
